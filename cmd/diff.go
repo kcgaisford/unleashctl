@@ -54,7 +54,7 @@ func runDiffScoped(ctx context.Context, c *client.Client, conn *connection, serv
 		return differ.Result{}, conflicts, nil
 	}
 
-	result := differ.Diff(scoped, remote, conn.Environment, conn.ContextName)
+	result := differ.Diff(scoped, remote, conn.Environment, conn.ContextName, conn.UIManagedEnabled)
 	return result, nil, nil
 }
 
@@ -83,6 +83,10 @@ func runDiff(_ *cobra.Command, _ []string) error {
 	services, err := servicesInScope(files)
 	if err != nil {
 		return err
+	}
+
+	if conn.UIManagedEnabled {
+		fmt.Printf("enabled/disabled is UI-managed for context %s — not diffed or applied\n", conn.ContextName)
 	}
 
 	c := client.New(conn.URL, conn.Token)

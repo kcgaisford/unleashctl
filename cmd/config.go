@@ -18,6 +18,13 @@ type Context struct {
 	Environment string `yaml:"environment,omitempty"`
 	TokenEnv    string `yaml:"token-env,omitempty"`
 	AllowSync   *bool  `yaml:"allow_sync,omitempty"`
+
+	// UIManagedEnabled means enabled/disabled state for this context is
+	// authoritative in the Unleash UI, not in flags/*.yaml: diff/apply never
+	// compare or push it, only strategies/type/description/tags reconcile
+	// normally. Typical use: prod flags an engineer turns on by hand rather
+	// than via a manifest change.
+	UIManagedEnabled bool `yaml:"ui_managed_enabled,omitempty"`
 }
 
 // AllowSyncResolved implements the name-based default from spec §2: false

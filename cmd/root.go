@@ -54,6 +54,8 @@ type connection struct {
 	URL         string
 	Token       string
 	Environment string
+	// UIManagedEnabled mirrors Context.UIManagedEnabled — see its doc comment.
+	UIManagedEnabled bool
 }
 
 // resolveConnection implements spec §2's per-command precedence: flag > env
@@ -99,7 +101,13 @@ func resolveConnection() (*connection, error) {
 		return nil, fmt.Errorf("no environment: pass --environment, or configure one on the context")
 	}
 
-	return &connection{ContextName: contextName, URL: url, Token: token, Environment: environment}, nil
+	return &connection{
+		ContextName:      contextName,
+		URL:              url,
+		Token:            token,
+		Environment:      environment,
+		UIManagedEnabled: ctx.UIManagedEnabled,
+	}, nil
 }
 
 func firstNonEmpty(values ...string) string {

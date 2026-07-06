@@ -50,7 +50,10 @@ type normStrategy struct {
 // Diff compares files (already filtered to one service) against remote, a
 // service-scoped export fetched via client.ExportByTag for the same
 // environment. context selects which contextOverride block applies.
-func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, context string) Result {
+// uiManagedEnabled, when true, skips comparing "enabled" entirely — the
+// live value is authoritative and never reported as pending (see
+// Context.UIManagedEnabled).
+func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, context string, uiManagedEnabled bool) Result {
 	remoteFeatures := make(map[string]gen.FeatureSchema, len(remote.Features))
 	for _, f := range remote.Features {
 		remoteFeatures[f.Name] = f
@@ -101,11 +104,13 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 			details = append(details, fmt.Sprintf("description: %q -> %q", derefStr(rf.Description), *resolved.Description))
 		}
 
-		re, hasEnv := remoteEnvs[name]
-		localEnabled := resolved.Enabled != nil && *resolved.Enabled
-		remoteEnabled := hasEnv && re.Enabled
-		if localEnabled != remoteEnabled {
-			details = append(details, fmt.Sprintf("enabled: %t -> %t", remoteEnabled, localEnabled))
+		if !uiManagedEnabled {
+			re, hasEnv := remoteEnvs[name]
+			localEnabled := resolved.Enabled != nil && *resolved.Enabled
+			remoteEnabled := hasEnv && re.Enabled
+			if localEnabled != remoteEnabled {
+				details = append(details, fmt.Sprintf("enabled: %t -> %t", remoteEnabled, localEnabled))
+			}
 		}
 
 		localStrategies := normalizeLocal(resolved.Strategies)

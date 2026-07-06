@@ -61,6 +61,27 @@ Every setting can also be passed without a config file at all — useful for
 CI — using `--url`/`--token`/`--environment`, or the `UNLEASHCTL_URL` /
 `UNLEASHCTL_TOKEN` env vars. Precedence is flag > env > context.
 
+### `ui_managed_enabled`: let the UI own on/off for a context
+
+Set `ui_managed_enabled: true` on a context (typically prod) when an
+engineer is expected to flip a flag on by hand in the Unleash UI, rather
+than by editing `flags/*.yaml`. For that context, `diff`/`apply` never
+compare or push the `enabled` field — the live value is authoritative and
+is left alone. Everything else (strategies, rollout parameters, type,
+description, tags) keeps reconciling from `flags/*.yaml` exactly as usual.
+A brand-new feature still lands disabled, since Unleash itself defaults a
+newly created environment to `enabled: false`. Both `diff` and `apply`
+print a one-line note when this is active, so it's clear why `enabled`
+never shows up as a pending change.
+
+```yaml
+  - name: prod
+    url: https://prod-unleash.internal
+    environment: production
+    token-env: UNLEASH_PROD_TOKEN
+    ui_managed_enabled: true
+```
+
 ## Author flags/*.yaml
 
 Each feature is one file under `flags/`, with a `metadata.service` tag that

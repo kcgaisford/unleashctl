@@ -9,3 +9,4 @@ contexts:
     environment: production
     token-env: UNLEASH_LOCAL_TOKEN
     allow_sync: false
+    ui_managed_enabled: true

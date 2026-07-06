@@ -49,6 +49,10 @@ func runApply(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	if conn.UIManagedEnabled {
+		fmt.Printf("enabled/disabled is UI-managed for context %s — not diffed or applied\n", conn.ContextName)
+	}
+
 	c := client.New(conn.URL, conn.Token)
 	ctx := context.Background()
 
@@ -75,7 +79,7 @@ func runApply(_ *cobra.Command, _ []string) error {
 		}
 
 		scoped := state.FilterByService(files, service)
-		payload := differ.BuildImportPayload(scoped, conn.Environment, conn.ContextName)
+		payload := differ.BuildImportPayload(scoped, conn.Environment, conn.ContextName, conn.UIManagedEnabled)
 
 		if flagDryRun {
 			enc := json.NewEncoder(os.Stdout)

@@ -13,7 +13,14 @@ const serviceTagType = "service"
 // path deletes and recreates strategies and tags for every feature named in
 // the payload (confirmed against export-import-service.ts), so a partial
 // payload would silently wipe strategies/tags it omits.
-func BuildImportPayload(files []*state.File, environment, context string) gen.ExportResultSchema {
+//
+// uiManagedEnabled, when true, omits FeatureEnvironments entirely: Unleash's
+// import applies "enabled" via (dto.data.featureEnvironments || []).map(...)
+// (export-import-service.ts), a no-op over an absent list, while
+// strategies/tags/type/description (driven by separate top-level lists)
+// keep applying normally. A brand-new feature still lands disabled, since
+// Unleash auto-provisions every environment at enabled:false on creation.
+func BuildImportPayload(files []*state.File, environment, context string, uiManagedEnabled bool) gen.ExportResultSchema {
 	features := make([]gen.FeatureSchema, 0, len(files))
 	featureEnvs := make([]gen.FeatureEnvironmentSchema, 0, len(files))
 	var strategies []gen.FeatureStrategySchema
@@ -34,14 +41,16 @@ func BuildImportPayload(files []*state.File, environment, context string) gen.Ex
 			Description: resolved.Description,
 		})
 
-		enabled := resolved.Enabled != nil && *resolved.Enabled
-		nameCopy, envCopy := name, environment
-		featureEnvs = append(featureEnvs, gen.FeatureEnvironmentSchema{
-			Name:        nameCopy,
-			FeatureName: &nameCopy,
-			Environment: &envCopy,
-			Enabled:     enabled,
-		})
+		if !uiManagedEnabled {
+			enabled := resolved.Enabled != nil && *resolved.Enabled
+			nameCopy, envCopy := name, environment
+			featureEnvs = append(featureEnvs, gen.FeatureEnvironmentSchema{
+				Name:        nameCopy,
+				FeatureName: &nameCopy,
+				Environment: &envCopy,
+				Enabled:     enabled,
+			})
+		}
 
 		if resolved.Strategies != nil {
 			for _, s := range *resolved.Strategies {
