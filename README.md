@@ -1,7 +1,14 @@
 # unleashctl
 
-A Go CLI wrapping the Unleash Admin API, built on Cobra + Viper. Full design
-in [`unleash-cli-tech-spec.md`](./unleash-cli-tech-spec.md).
+unleashctl is a CLI that manages feature flags as declarative manifests —
+the same way `kubectl` manages Kubernetes manifests. `flags/*.yaml` is your
+desired state, checked into git; `unleashctl diff`/`apply` reconciles a live
+Unleash instance against it, the same way `kubectl diff`/`apply` reconciles
+a cluster against your YAML. A "migration" is just a git-tracked change to
+those same files — there's no separate migration format to author.
+
+Built in Go on Cobra + Viper, wrapping the Unleash Admin API. Full design in
+[`unleash-cli-tech-spec.md`](./unleash-cli-tech-spec.md).
 
 **Status**: Phase 1 implemented — `unleashctl diff` and `unleashctl apply`,
 built on contexts (§2) and `flags/*.yaml` desired-state files (§5.1). CRUD
