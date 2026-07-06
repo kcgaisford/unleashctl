@@ -1,0 +1,20 @@
+apiVersion: unleashctl/v1
+kind: Feature
+metadata:
+  name: beta-dashboard
+  service: growth
+spec:
+  type: release
+  description: New analytics dashboard, beta cohort
+  enabled: true
+  strategies:
+    - name: flexibleRollout
+      parameters: { rollout: "100", stickiness: userId, groupId: beta-dashboard }
+envOverride:
+  production:
+    strategies:
+      - name: flexibleRollout
+        parameters: { rollout: "5", stickiness: userId, groupId: beta-dashboard }
+contextOverride:
+  local-prod:
+    enabled: false

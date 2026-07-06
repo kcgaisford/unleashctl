@@ -1,0 +1,12 @@
+apiVersion: unleashctl/v1
+kind: Feature
+metadata:
+  name: new-checkout
+  service: payments
+spec:
+  type: release
+  description: New checkout flow poke
+  enabled: true
+  strategies:
+    - name: flexibleRollout
+      parameters: { rollout: "50", stickiness: userId, groupId: new-checkout }

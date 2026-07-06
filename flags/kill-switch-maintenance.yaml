@@ -1,0 +1,11 @@
+apiVersion: unleashctl/v1
+kind: Feature
+metadata:
+  name: kill-switch-maintenance
+  service: payments
+spec:
+  type: operational
+  description: Emergency kill switch to put checkout into maintenance mode
+  enabled: false
+  strategies:
+    - name: default

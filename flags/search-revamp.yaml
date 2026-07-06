@@ -1,0 +1,14 @@
+apiVersion: unleashctl/v1
+kind: Feature
+metadata:
+  name: search-revamp
+  service: growth
+spec:
+  type: experiment
+  description: Revamped search relevance ranking
+  enabled: true
+  strategies:
+    - name: default
+contextOverride:
+  local-prod:
+    enabled: false

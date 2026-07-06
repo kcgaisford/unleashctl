@@ -1,0 +1,16 @@
+apiVersion: unleashctl/v1
+kind: Feature
+metadata:
+  name: refunds-v2
+  service: payments
+spec:
+  type: release
+  description: Rewritten refunds pipeline
+  enabled: true
+  strategies:
+    - name: flexibleRollout
+      parameters: { rollout: "10", stickiness: userId, groupId: refunds-v2 }
+envOverride:
+  development:
+    strategies:
+      - name: default
