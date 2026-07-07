@@ -30,15 +30,29 @@ func Diff(w io.Writer, format string, result differ.Result) error {
 	}
 }
 
+// actionSymbol gives each Action a Terraform-plan-style marker: "+" for a
+// full resource body (Create/Revive), "~" for a field-level diff (Update).
+func actionSymbol(a differ.Action) string {
+	switch a {
+	case differ.ActionCreate, differ.ActionRevive:
+		return "+"
+	case differ.ActionUpdate:
+		return "~"
+	default:
+		return " "
+	}
+}
+
 func diffTable(w io.Writer, result differ.Result) error {
 	if !result.HasChanges() {
 		fmt.Fprintln(w, "No changes.")
 	}
 	for _, c := range result.Changes {
+		sym := actionSymbol(c.Action)
 		action := strings.ToUpper(string(c.Action))
-		fmt.Fprintf(w, "%-7s %s\n", action, c.FeatureName)
+		fmt.Fprintf(w, "%s %-7s %s\n", sym, action, c.FeatureName)
 		for _, d := range c.Details {
-			fmt.Fprintf(w, "        %s\n", d)
+			fmt.Fprintf(w, "    %s %s\n", sym, d)
 		}
 	}
 	if len(result.Informational) > 0 {

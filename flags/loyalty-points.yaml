@@ -8,5 +8,7 @@ spec:
   description: Loyalty points on checkout, gated to production by manual UI toggle
   enabled: true
   strategies:
-    - name: flexibleRollout
-      parameters: { rollout: "100", stickiness: userId, groupId: loyalty-points }
+    - name: default
+  # strategies:
+  #   - name: flexibleRollout
+  #     parameters: { rollout: "100", stickiness: userId, groupId: loyalty-points }

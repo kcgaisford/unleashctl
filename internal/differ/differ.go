@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/kcgaisford/unleashctl/internal/client/gen"
 	"github.com/kcgaisford/unleashctl/internal/state"
@@ -101,7 +102,7 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 			changes = append(changes, Change{
 				FeatureName: name,
 				Action:      ActionCreate,
-				Details:     []string{"feature does not exist remotely"},
+				Details:     specDetails(resolved),
 			})
 			continue
 		}
@@ -117,7 +118,7 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 			changes = append(changes, Change{
 				FeatureName: name,
 				Action:      ActionRevive,
-				Details:     []string{"feature is archived remotely — will revive on apply"},
+				Details:     specDetails(resolved),
 			})
 			continue
 		}
@@ -143,7 +144,8 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 		localStrategies := normalizeLocal(resolved.Strategies)
 		remoteStrategies := normalizeRemote(remoteStrategiesByFeature[name])
 		if !reflect.DeepEqual(localStrategies, remoteStrategies) {
-			details = append(details, fmt.Sprintf("strategies: %d remote -> %d local", len(remoteStrategies), len(localStrategies)))
+			details = append(details, fmt.Sprintf("strategies: %s -> %s",
+				formatNormStrategies(remoteStrategies), formatNormStrategies(localStrategies)))
 		}
 
 		if len(details) > 0 {
@@ -171,6 +173,74 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 	sort.Slice(changes, func(i, j int) bool { return changes[i].FeatureName < changes[j].FeatureName })
 
 	return Result{Changes: changes, Informational: informational, Archive: archive}
+}
+
+// specDetails renders a fully-resolved Spec into detail lines for the
+// Terraform-style full-spec dump shown on Create/Revive, as opposed to
+// Update's field-level diff lines.
+func specDetails(spec state.Spec) []string {
+	var d []string
+	if spec.Type != nil {
+		d = append(d, fmt.Sprintf("type: %s", *spec.Type))
+	}
+	if spec.Description != nil {
+		d = append(d, fmt.Sprintf("description: %q", *spec.Description))
+	}
+	if spec.Enabled != nil {
+		d = append(d, fmt.Sprintf("enabled: %t", *spec.Enabled))
+	}
+	if spec.Strategies != nil && len(*spec.Strategies) > 0 {
+		d = append(d, fmt.Sprintf("strategies: %s", formatStrategies(*spec.Strategies)))
+	}
+	return d
+}
+
+// formatStrategy renders one strategy's name, sorted parameters, and disabled
+// flag as a single compact fragment, shared by both the full-spec dump
+// (Create/Revive, via formatStrategies) and the before/after Update line
+// (via formatNormStrategies).
+func formatStrategy(name string, params map[string]string, disabled bool) string {
+	part := name
+	if len(params) > 0 {
+		keys := make([]string, 0, len(params))
+		for k := range params {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		pairs := make([]string, len(keys))
+		for j, k := range keys {
+			pairs[j] = fmt.Sprintf("%s=%s", k, params[k])
+		}
+		part += "(" + strings.Join(pairs, ", ") + ")"
+	}
+	if disabled {
+		part += " [disabled]"
+	}
+	return part
+}
+
+func formatStrategies(strategies []state.Strategy) string {
+	if len(strategies) == 0 {
+		return "(none)"
+	}
+	parts := make([]string, len(strategies))
+	for i, s := range strategies {
+		parts[i] = formatStrategy(s.Name, s.Parameters, s.Disabled != nil && *s.Disabled)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// formatNormStrategies mirrors formatStrategies but for the already-normalized
+// comparison type (normStrategy), used for Update's before/after line.
+func formatNormStrategies(strategies []normStrategy) string {
+	if len(strategies) == 0 {
+		return "(none)"
+	}
+	parts := make([]string, len(strategies))
+	for i, s := range strategies {
+		parts[i] = formatStrategy(s.Name, s.Parameters, s.Disabled)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func normalizeLocal(strategies *[]state.Strategy) []normStrategy {
