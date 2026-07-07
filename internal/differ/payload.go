@@ -1,6 +1,8 @@
 package differ
 
 import (
+	"sort"
+
 	"github.com/kcgaisford/unleashctl/internal/client/gen"
 	"github.com/kcgaisford/unleashctl/internal/state"
 )
@@ -25,7 +27,8 @@ func BuildImportPayload(files []*state.File, environment, context string, uiMana
 	featureEnvs := make([]gen.FeatureEnvironmentSchema, 0, len(files))
 	var strategies []gen.FeatureStrategySchema
 	var tags []gen.FeatureTagSchema
-	sawService := false
+	var links []gen.FeatureLinksSchema
+	tagTypesSeen := map[string]bool{}
 
 	for _, file := range files {
 		name := file.Metadata.Name
@@ -36,9 +39,10 @@ func BuildImportPayload(files []*state.File, environment, context string, uiMana
 			typ = *resolved.Type
 		}
 		features = append(features, gen.FeatureSchema{
-			Name:        name,
-			Type:        &typ,
-			Description: resolved.Description,
+			Name:           name,
+			Type:           &typ,
+			Description:    resolved.Description,
+			ImpressionData: resolved.ImpressionData,
 		})
 
 		if !uiManagedEnabled {
@@ -70,19 +74,39 @@ func BuildImportPayload(files []*state.File, environment, context string, uiMana
 		}
 
 		if file.Metadata.Service != "" {
-			sawService = true
+			tagTypesSeen[serviceTagType] = true
 			tags = append(tags, gen.FeatureTagSchema{
 				FeatureName: name,
 				TagType:     strPtr(serviceTagType),
 				TagValue:    file.Metadata.Service,
 			})
 		}
+
+		if file.Tags != nil {
+			for _, t := range *file.Tags {
+				tagTypesSeen[t.Type] = true
+				tags = append(tags, gen.FeatureTagSchema{
+					FeatureName: name,
+					TagType:     strPtr(t.Type),
+					TagValue:    t.Value,
+				})
+			}
+		}
+
+		if file.Links != nil && len(*file.Links) > 0 {
+			featureLinks := make([]gen.FeatureLinkSchema, len(*file.Links))
+			for i, l := range *file.Links {
+				featureLinks[i] = gen.FeatureLinkSchema{Title: l.Title, Url: l.URL}
+			}
+			links = append(links, gen.FeatureLinksSchema{Feature: name, Links: featureLinks})
+		}
 	}
 
-	tagTypes := []gen.TagTypeSchema{}
-	if sawService {
-		tagTypes = append(tagTypes, gen.TagTypeSchema{Name: serviceTagType})
+	tagTypes := make([]gen.TagTypeSchema, 0, len(tagTypesSeen))
+	for name := range tagTypesSeen {
+		tagTypes = append(tagTypes, gen.TagTypeSchema{Name: name})
 	}
+	sort.Slice(tagTypes, func(i, j int) bool { return tagTypes[i].Name < tagTypes[j].Name })
 
 	payload := gen.ExportResultSchema{
 		Features:          features,
@@ -94,6 +118,9 @@ func BuildImportPayload(files []*state.File, environment, context string, uiMana
 	}
 	if len(tags) > 0 {
 		payload.FeatureTags = &tags
+	}
+	if len(links) > 0 {
+		payload.Links = &links
 	}
 	return payload
 }

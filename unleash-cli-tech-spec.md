@@ -281,9 +281,16 @@ spec:                              # applies everywhere unless overridden
   type: release
   description: New checkout flow
   enabled: true
+  impressionData: true
   strategies:
     - name: flexibleRollout
       parameters: { rollout: "25", stickiness: userId, groupId: new-checkout }
+links:                             # optional — additional links for the feature
+  - url: https://wiki.internal/new-checkout
+    title: Design doc
+tags:                              # optional — additional tags, alongside the automatic service tag
+  - type: team
+    value: checkout
 envOverride:                       # optional — applies to every context on this environment
   development:
     strategies:
@@ -318,6 +325,14 @@ This also covers the less-common shared-instance case (one context, both
 `envOverride` is keyed by environment name regardless of how many
 contexts exist, so it disambiguates correctly whether that context is the
 only one using an environment name or one of several.
+
+`links` and `tags` (both optional, top-level, siblings of `metadata`/
+`spec`) are declared once per feature and always apply regardless of
+environment or context — unlike `spec`, they don't participate in
+`envOverride`/`contextOverride` resolution, since neither concept is
+environment-scoped in Unleash itself. `tags` is in addition to the
+automatic `service` tag described above — both end up applied to the
+feature.
 
 ### 5.2 `sync` — instance ↔ instance, exclusively
 

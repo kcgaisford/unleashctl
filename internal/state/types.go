@@ -21,10 +21,28 @@ type Metadata struct {
 // distinguish "not set in this block" from "explicitly set to zero value" so
 // resolution can tell which keys an override block actually touches.
 type Spec struct {
-	Type        *string     `yaml:"type,omitempty"`
-	Description *string     `yaml:"description,omitempty"`
-	Enabled     *bool       `yaml:"enabled,omitempty"`
-	Strategies  *[]Strategy `yaml:"strategies,omitempty"`
+	Type           *string     `yaml:"type,omitempty"`
+	Description    *string     `yaml:"description,omitempty"`
+	Enabled        *bool       `yaml:"enabled,omitempty"`
+	ImpressionData *bool       `yaml:"impressionData,omitempty"`
+	Strategies     *[]Strategy `yaml:"strategies,omitempty"`
+}
+
+// Link is one entry under the top-level links: section (spec §5.1) — a URL
+// related to the feature, with an optional title. Not part of Spec: links
+// aren't environment/context-scoped in Unleash, so they're declared once per
+// feature file and untouched by envOverride/contextOverride resolution.
+type Link struct {
+	Title *string `yaml:"title,omitempty"`
+	URL   string  `yaml:"url"`
+}
+
+// Tag is one entry under the top-level tags: section (spec §5.1) — an
+// additional Unleash tag beyond the automatic metadata.service tag. Not part
+// of Spec, for the same reason as Link.
+type Tag struct {
+	Type  string `yaml:"type"`
+	Value string `yaml:"value"`
 }
 
 // File is the parsed contents of one flags/*.yaml file.
@@ -33,6 +51,8 @@ type File struct {
 	Kind            string          `yaml:"kind"`
 	Metadata        Metadata        `yaml:"metadata"`
 	Spec            Spec            `yaml:"spec"`
+	Links           *[]Link         `yaml:"links,omitempty"`
+	Tags            *[]Tag          `yaml:"tags,omitempty"`
 	EnvOverride     map[string]Spec `yaml:"envOverride,omitempty"`
 	ContextOverride map[string]Spec `yaml:"contextOverride,omitempty"`
 
@@ -66,6 +86,9 @@ func mergeSpec(base, override Spec) Spec {
 	}
 	if override.Enabled != nil {
 		merged.Enabled = override.Enabled
+	}
+	if override.ImpressionData != nil {
+		merged.ImpressionData = override.ImpressionData
 	}
 	if override.Strategies != nil {
 		merged.Strategies = override.Strategies

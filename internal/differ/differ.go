@@ -89,6 +89,26 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 		remoteStrategiesByFeature[*s.FeatureName] = append(remoteStrategiesByFeature[*s.FeatureName], s)
 	}
 
+	// remoteTagsByFeature excludes the auto-generated "service" tag type: that
+	// one is tracked via Metadata.Service, not file.Tags, so including it here
+	// would make every file with a service tag show a phantom local-tags diff.
+	remoteTagsByFeature := make(map[string][]gen.FeatureTagSchema)
+	if remote.FeatureTags != nil {
+		for _, tg := range *remote.FeatureTags {
+			if tg.TagType != nil && *tg.TagType == serviceTagType {
+				continue
+			}
+			remoteTagsByFeature[tg.FeatureName] = append(remoteTagsByFeature[tg.FeatureName], tg)
+		}
+	}
+
+	remoteLinksByFeature := make(map[string][]gen.FeatureLinkSchema)
+	if remote.Links != nil {
+		for _, l := range *remote.Links {
+			remoteLinksByFeature[l.Feature] = l.Links
+		}
+	}
+
 	localNames := make(map[string]bool, len(files))
 	var changes []Change
 
@@ -102,7 +122,7 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 			changes = append(changes, Change{
 				FeatureName: name,
 				Action:      ActionCreate,
-				Details:     specDetails(resolved),
+				Details:     specDetails(file, resolved),
 			})
 			continue
 		}
@@ -118,7 +138,7 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 			changes = append(changes, Change{
 				FeatureName: name,
 				Action:      ActionRevive,
-				Details:     specDetails(resolved),
+				Details:     specDetails(file, resolved),
 			})
 			continue
 		}
@@ -130,6 +150,9 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 		}
 		if resolved.Description != nil && (rf.Description == nil || *rf.Description != *resolved.Description) {
 			details = append(details, fmt.Sprintf("description: %q -> %q", derefStr(rf.Description), *resolved.Description))
+		}
+		if resolved.ImpressionData != nil && (rf.ImpressionData == nil || *rf.ImpressionData != *resolved.ImpressionData) {
+			details = append(details, fmt.Sprintf("impressionData: %t -> %t", derefBool(rf.ImpressionData), *resolved.ImpressionData))
 		}
 
 		if !uiManagedEnabled {
@@ -146,6 +169,20 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 		if !reflect.DeepEqual(localStrategies, remoteStrategies) {
 			details = append(details, fmt.Sprintf("strategies: %s -> %s",
 				formatNormStrategies(remoteStrategies), formatNormStrategies(localStrategies)))
+		}
+
+		localTags := normalizeLocalTags(file.Tags)
+		remoteTags := normalizeRemoteTags(remoteTagsByFeature[name])
+		if !reflect.DeepEqual(localTags, remoteTags) {
+			details = append(details, fmt.Sprintf("tags: %s -> %s",
+				formatNormTags(remoteTags), formatNormTags(localTags)))
+		}
+
+		localLinks := normalizeLocalLinks(file.Links)
+		remoteLinks := normalizeRemoteLinks(remoteLinksByFeature[name])
+		if !reflect.DeepEqual(localLinks, remoteLinks) {
+			details = append(details, fmt.Sprintf("links: %s -> %s",
+				formatNormLinks(remoteLinks), formatNormLinks(localLinks)))
 		}
 
 		if len(details) > 0 {
@@ -175,10 +212,10 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 	return Result{Changes: changes, Informational: informational, Archive: archive}
 }
 
-// specDetails renders a fully-resolved Spec into detail lines for the
-// Terraform-style full-spec dump shown on Create/Revive, as opposed to
-// Update's field-level diff lines.
-func specDetails(spec state.Spec) []string {
+// specDetails renders a fully-resolved Spec (plus the file's non-overridable
+// tags/links) into detail lines for the Terraform-style full-spec dump shown
+// on Create/Revive, as opposed to Update's field-level diff lines.
+func specDetails(file *state.File, spec state.Spec) []string {
 	var d []string
 	if spec.Type != nil {
 		d = append(d, fmt.Sprintf("type: %s", *spec.Type))
@@ -189,8 +226,17 @@ func specDetails(spec state.Spec) []string {
 	if spec.Enabled != nil {
 		d = append(d, fmt.Sprintf("enabled: %t", *spec.Enabled))
 	}
+	if spec.ImpressionData != nil {
+		d = append(d, fmt.Sprintf("impressionData: %t", *spec.ImpressionData))
+	}
 	if spec.Strategies != nil && len(*spec.Strategies) > 0 {
 		d = append(d, fmt.Sprintf("strategies: %s", formatStrategies(*spec.Strategies)))
+	}
+	if file.Tags != nil && len(*file.Tags) > 0 {
+		d = append(d, fmt.Sprintf("tags: %s", formatNormTags(normalizeLocalTags(file.Tags))))
+	}
+	if file.Links != nil && len(*file.Links) > 0 {
+		d = append(d, fmt.Sprintf("links: %s", formatNormLinks(normalizeLocalLinks(file.Links))))
 	}
 	return d
 }
@@ -295,4 +341,107 @@ func derefStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func derefBool(b *bool) bool {
+	return b != nil && *b
+}
+
+type normTag struct {
+	Type  string
+	Value string
+}
+
+// normalizeLocalTags/normalizeRemoteTags sort by (type, value) so tags:
+// order in the YAML (or the order Unleash happens to return them in) never
+// causes a spurious diff — only set membership matters.
+func normalizeLocalTags(tags *[]state.Tag) []normTag {
+	if tags == nil {
+		return nil
+	}
+	out := make([]normTag, len(*tags))
+	for i, t := range *tags {
+		out[i] = normTag{Type: t.Type, Value: t.Value}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Value < out[j].Value
+	})
+	return out
+}
+
+func normalizeRemoteTags(tags []gen.FeatureTagSchema) []normTag {
+	if tags == nil {
+		return nil
+	}
+	out := make([]normTag, len(tags))
+	for i, t := range tags {
+		out[i] = normTag{Type: derefStr(t.TagType), Value: t.TagValue}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Value < out[j].Value
+	})
+	return out
+}
+
+func formatNormTags(tags []normTag) string {
+	if len(tags) == 0 {
+		return "(none)"
+	}
+	parts := make([]string, len(tags))
+	for i, t := range tags {
+		parts[i] = fmt.Sprintf("%s:%s", t.Type, t.Value)
+	}
+	return strings.Join(parts, ", ")
+}
+
+type normLink struct {
+	Title string
+	URL   string
+}
+
+// normalizeLocalLinks/normalizeRemoteLinks sort by URL so links:
+// order never causes a spurious diff — only set membership matters.
+func normalizeLocalLinks(links *[]state.Link) []normLink {
+	if links == nil {
+		return nil
+	}
+	out := make([]normLink, len(*links))
+	for i, l := range *links {
+		out[i] = normLink{Title: derefStr(l.Title), URL: l.URL}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
+	return out
+}
+
+func normalizeRemoteLinks(links []gen.FeatureLinkSchema) []normLink {
+	if links == nil {
+		return nil
+	}
+	out := make([]normLink, len(links))
+	for i, l := range links {
+		out[i] = normLink{Title: derefStr(l.Title), URL: l.Url}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
+	return out
+}
+
+func formatNormLinks(links []normLink) string {
+	if len(links) == 0 {
+		return "(none)"
+	}
+	parts := make([]string, len(links))
+	for i, l := range links {
+		if l.Title != "" {
+			parts[i] = fmt.Sprintf("%s (%s)", l.URL, l.Title)
+		} else {
+			parts[i] = l.URL
+		}
+	}
+	return strings.Join(parts, ", ")
 }

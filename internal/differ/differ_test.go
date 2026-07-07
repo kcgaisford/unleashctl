@@ -198,6 +198,191 @@ func TestDiffSkipsEnabledWhenUIManaged(t *testing.T) {
 	}
 }
 
+// TestDiffUpdateOnImpressionDataMismatch verifies impressionData is diffed
+// field-by-field like type/description: a local/remote mismatch produces an
+// update.
+func TestDiffUpdateOnImpressionDataMismatch(t *testing.T) {
+	name := "new-checkout"
+	files := []*state.File{
+		{
+			Metadata: state.Metadata{Name: name, Service: "payments"},
+			Spec:     state.Spec{Enabled: boolPtrT(true), Type: strPtrT("release"), ImpressionData: boolPtrT(true)},
+		},
+	}
+	remote := &gen.ExportResultSchema{
+		Features: []gen.FeatureSchema{{Name: name, Type: strPtrT("release"), ImpressionData: boolPtrT(false)}},
+		FeatureEnvironments: &[]gen.FeatureEnvironmentSchema{
+			{Name: name, FeatureName: &name, Enabled: true},
+		},
+		FeatureStrategies: []gen.FeatureStrategySchema{},
+	}
+
+	result := Diff(files, remote, "production", "prod", false, false)
+	if len(result.Changes) != 1 || result.Changes[0].Action != ActionUpdate {
+		t.Fatalf("want one update, got %+v", result.Changes)
+	}
+}
+
+// TestDiffTagsAddedProducesUpdate verifies a local tags: entry with no
+// matching remote FeatureTags entry produces an update, and that the
+// auto-generated `service` tag isn't double-counted as a phantom local tag.
+func TestDiffTagsAddedProducesUpdate(t *testing.T) {
+	name := "new-checkout"
+	files := []*state.File{
+		{
+			Metadata: state.Metadata{Name: name, Service: "payments"},
+			Spec:     state.Spec{Enabled: boolPtrT(true), Type: strPtrT("release")},
+			Tags:     &[]state.Tag{{Type: "team", Value: "checkout"}},
+		},
+	}
+	remote := &gen.ExportResultSchema{
+		Features: []gen.FeatureSchema{{Name: name, Type: strPtrT("release")}},
+		FeatureEnvironments: &[]gen.FeatureEnvironmentSchema{
+			{Name: name, FeatureName: &name, Enabled: true},
+		},
+		FeatureStrategies: []gen.FeatureStrategySchema{},
+		FeatureTags: &[]gen.FeatureTagSchema{
+			{FeatureName: name, TagType: strPtrT("service"), TagValue: "payments"},
+		},
+	}
+
+	result := Diff(files, remote, "production", "prod", false, false)
+	if len(result.Changes) != 1 || result.Changes[0].Action != ActionUpdate {
+		t.Fatalf("want one update for added tag, got %+v", result.Changes)
+	}
+}
+
+// TestDiffTagsNoChangeWhenReordered verifies tag order doesn't cause a
+// spurious diff.
+func TestDiffTagsNoChangeWhenReordered(t *testing.T) {
+	name := "new-checkout"
+	files := []*state.File{
+		{
+			Metadata: state.Metadata{Name: name, Service: "payments"},
+			Spec:     state.Spec{Enabled: boolPtrT(true), Type: strPtrT("release")},
+			Tags: &[]state.Tag{
+				{Type: "team", Value: "checkout"},
+				{Type: "priority", Value: "high"},
+			},
+		},
+	}
+	remote := &gen.ExportResultSchema{
+		Features: []gen.FeatureSchema{{Name: name, Type: strPtrT("release")}},
+		FeatureEnvironments: &[]gen.FeatureEnvironmentSchema{
+			{Name: name, FeatureName: &name, Enabled: true},
+		},
+		FeatureStrategies: []gen.FeatureStrategySchema{},
+		FeatureTags: &[]gen.FeatureTagSchema{
+			{FeatureName: name, TagType: strPtrT("service"), TagValue: "payments"},
+			{FeatureName: name, TagType: strPtrT("priority"), TagValue: "high"},
+			{FeatureName: name, TagType: strPtrT("team"), TagValue: "checkout"},
+		},
+	}
+
+	result := Diff(files, remote, "production", "prod", false, false)
+	if len(result.Changes) != 0 {
+		t.Fatalf("want no changes for reordered tags, got %+v", result.Changes)
+	}
+}
+
+// TestDiffLinksAddedProducesUpdate verifies a local links: entry with no
+// matching remote Links entry produces an update.
+func TestDiffLinksAddedProducesUpdate(t *testing.T) {
+	name := "new-checkout"
+	files := []*state.File{
+		{
+			Metadata: state.Metadata{Name: name, Service: "payments"},
+			Spec:     state.Spec{Enabled: boolPtrT(true), Type: strPtrT("release")},
+			Links:    &[]state.Link{{URL: "https://wiki.internal/new-checkout", Title: strPtrT("Design doc")}},
+		},
+	}
+	remote := &gen.ExportResultSchema{
+		Features: []gen.FeatureSchema{{Name: name, Type: strPtrT("release")}},
+		FeatureEnvironments: &[]gen.FeatureEnvironmentSchema{
+			{Name: name, FeatureName: &name, Enabled: true},
+		},
+		FeatureStrategies: []gen.FeatureStrategySchema{},
+	}
+
+	result := Diff(files, remote, "production", "prod", false, false)
+	if len(result.Changes) != 1 || result.Changes[0].Action != ActionUpdate {
+		t.Fatalf("want one update for added link, got %+v", result.Changes)
+	}
+}
+
+// TestDiffLinksNoChangeWhenReordered verifies link order doesn't cause a
+// spurious diff.
+func TestDiffLinksNoChangeWhenReordered(t *testing.T) {
+	name := "new-checkout"
+	files := []*state.File{
+		{
+			Metadata: state.Metadata{Name: name, Service: "payments"},
+			Spec:     state.Spec{Enabled: boolPtrT(true), Type: strPtrT("release")},
+			Links: &[]state.Link{
+				{URL: "https://wiki.internal/a", Title: strPtrT("A")},
+				{URL: "https://wiki.internal/b", Title: strPtrT("B")},
+			},
+		},
+	}
+	remote := &gen.ExportResultSchema{
+		Features: []gen.FeatureSchema{{Name: name, Type: strPtrT("release")}},
+		FeatureEnvironments: &[]gen.FeatureEnvironmentSchema{
+			{Name: name, FeatureName: &name, Enabled: true},
+		},
+		FeatureStrategies: []gen.FeatureStrategySchema{},
+		Links: &[]gen.FeatureLinksSchema{
+			{Feature: name, Links: []gen.FeatureLinkSchema{
+				{Url: "https://wiki.internal/b", Title: strPtrT("B")},
+				{Url: "https://wiki.internal/a", Title: strPtrT("A")},
+			}},
+		},
+	}
+
+	result := Diff(files, remote, "production", "prod", false, false)
+	if len(result.Changes) != 0 {
+		t.Fatalf("want no changes for reordered links, got %+v", result.Changes)
+	}
+}
+
+func TestBuildImportPayloadIncludesImpressionDataTagsAndLinks(t *testing.T) {
+	files := []*state.File{
+		{
+			Metadata: state.Metadata{Name: "new-checkout", Service: "payments"},
+			Spec: state.Spec{
+				Enabled:        boolPtrT(true),
+				Type:           strPtrT("release"),
+				ImpressionData: boolPtrT(true),
+			},
+			Tags:  &[]state.Tag{{Type: "team", Value: "checkout"}},
+			Links: &[]state.Link{{URL: "https://wiki.internal/new-checkout", Title: strPtrT("Design doc")}},
+		},
+	}
+
+	payload := BuildImportPayload(files, "production", "prod", false)
+
+	if len(payload.Features) != 1 || payload.Features[0].ImpressionData == nil || !*payload.Features[0].ImpressionData {
+		t.Fatalf("want ImpressionData true on feature, got %+v", payload.Features)
+	}
+	if payload.FeatureTags == nil || len(*payload.FeatureTags) != 2 {
+		t.Fatalf("want 2 tags (service + team), got %+v", payload.FeatureTags)
+	}
+	if payload.Links == nil || len(*payload.Links) != 1 || (*payload.Links)[0].Feature != "new-checkout" {
+		t.Fatalf("want Links populated for new-checkout, got %+v", payload.Links)
+	}
+	if len((*payload.Links)[0].Links) != 1 || (*payload.Links)[0].Links[0].Url != "https://wiki.internal/new-checkout" {
+		t.Fatalf("want link url set, got %+v", (*payload.Links)[0].Links)
+	}
+	foundTeamType := false
+	for _, tt := range payload.TagTypes {
+		if tt.Name == "team" {
+			foundTeamType = true
+		}
+	}
+	if !foundTeamType {
+		t.Fatalf("want tagTypes to include custom type 'team', got %+v", payload.TagTypes)
+	}
+}
+
 func TestBuildImportPayloadOmitsFeatureEnvironmentsWhenUIManaged(t *testing.T) {
 	files := []*state.File{
 		{

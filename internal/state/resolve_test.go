@@ -61,3 +61,33 @@ func TestResolve(t *testing.T) {
 		}
 	})
 }
+
+// TestResolveImpressionDataOverride verifies ImpressionData merges the same
+// way Enabled does: spec's value applies by default, and a contextOverride
+// block that sets it wins over spec.
+func TestResolveImpressionDataOverride(t *testing.T) {
+	f := &File{
+		Spec: Spec{
+			ImpressionData: boolPtr(false),
+		},
+		ContextOverride: map[string]Spec{
+			"prod": {
+				ImpressionData: boolPtr(true),
+			},
+		},
+	}
+
+	t.Run("no override falls back to spec", func(t *testing.T) {
+		got := f.Resolve("production", "stage-prod-clone")
+		if got.ImpressionData == nil || *got.ImpressionData != false {
+			t.Fatalf("ImpressionData = %v, want false", got.ImpressionData)
+		}
+	})
+
+	t.Run("contextOverride wins", func(t *testing.T) {
+		got := f.Resolve("production", "prod")
+		if got.ImpressionData == nil || *got.ImpressionData != true {
+			t.Fatalf("ImpressionData = %v, want true (contextOverride)", got.ImpressionData)
+		}
+	})
+}

@@ -98,9 +98,16 @@ spec:
   type: release
   description: New checkout flow
   enabled: true
+  impressionData: true
   strategies:
     - name: flexibleRollout
       parameters: { rollout: "25", stickiness: userId, groupId: new-checkout }
+links:
+  - url: https://wiki.internal/new-checkout
+    title: Design doc
+tags:
+  - type: team
+    value: checkout
 envOverride:
   development:
     strategies:
@@ -113,6 +120,11 @@ contextOverride:
 `envOverride` (keyed by environment name) and `contextOverride` (keyed by
 context name, wins on conflict) are optional — a file with neither is
 identical on every instance. See spec §5.1 for the full resolution rule.
+
+`links` and `tags` are optional, top-level (siblings of `metadata`/`spec`),
+and always apply regardless of environment/context — they don't go through
+`envOverride`/`contextOverride`. `tags` is in addition to the automatic
+`service` tag above.
 
 ## Usage
 
