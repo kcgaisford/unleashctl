@@ -97,9 +97,6 @@ func runContextFieldsDiff(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if result.HasChanges() {
-		os.Exit(2)
-	}
 	return nil
 }
 

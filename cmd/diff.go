@@ -107,7 +107,6 @@ func runDiff(_ *cobra.Command, _ []string) error {
 	c := client.New(conn.URL, conn.Token)
 	ctx := context.Background()
 
-	hasChanges := false
 	for _, service := range services {
 		result, conflicts, err := runDiffScoped(ctx, c, conn, service, files, flagArchiveMissing)
 		if err != nil {
@@ -125,13 +124,7 @@ func runDiff(_ *cobra.Command, _ []string) error {
 		if err := render.Diff(os.Stdout, flagOutput, result); err != nil {
 			return err
 		}
-		if result.HasChanges() {
-			hasChanges = true
-		}
 	}
 
-	if hasChanges {
-		os.Exit(2)
-	}
 	return nil
 }

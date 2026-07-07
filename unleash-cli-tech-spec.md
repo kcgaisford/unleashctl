@@ -572,7 +572,7 @@ unleashctl apply --context stage --yes
 unleashctl apply --context prod --yes
 
 # 3. Periodic drift check (same command, no separate verify step)
-unleashctl diff --context prod   # exit code 2 if anything's drifted or pending
+unleashctl diff --context prod   # exit 0 even if drifted; exit 1 only on real errors
 
 # 4. Ad hoc, outside the git-tracked flow entirely: is stage actually
 #    caught up with dev right now? (whole-cluster comparison, no flags/
