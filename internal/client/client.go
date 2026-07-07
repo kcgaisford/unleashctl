@@ -174,6 +174,26 @@ func (c *Client) GetFeature(ctx context.Context, project, name string) (*gen.Fea
 	return &out, nil
 }
 
+type archiveFeaturesRequest struct {
+	Features []string `json:"features"`
+}
+
+// ArchiveFeatures batch-archives the given feature names in project (spec
+// §6.1 --archive-missing).
+func (c *Client) ArchiveFeatures(ctx context.Context, project string, names []string) error {
+	req := archiveFeaturesRequest{Features: names}
+	path := fmt.Sprintf("/api/admin/projects/%s/archive", project)
+	return c.do(ctx, http.MethodPost, path, req, nil)
+}
+
+// ReviveFeatures batch-revives the given (previously archived) feature names
+// in project. POST /api/admin/projects/{projectId}/revive.
+func (c *Client) ReviveFeatures(ctx context.Context, project string, names []string) error {
+	req := archiveFeaturesRequest{Features: names}
+	path := fmt.Sprintf("/api/admin/projects/%s/revive", project)
+	return c.do(ctx, http.MethodPost, path, req, nil)
+}
+
 type featureTagsResponse struct {
 	Tags []gen.TagSchema `json:"tags"`
 }

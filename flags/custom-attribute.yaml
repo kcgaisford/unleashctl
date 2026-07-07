@@ -1,0 +1,11 @@
+apiVersion: unleashctl/v1
+kind: Feature
+metadata:
+  name: custom-context
+  service: payments
+spec:
+  type: release
+  description: custom-context flow poke
+  strategies:
+    - name: flexibleRollout
+      parameters: { rollout: "50", stickiness: customContextId, groupId: new-checkout }

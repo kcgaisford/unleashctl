@@ -29,13 +29,24 @@ Exit codes: 0 = no changes, 2 = changes pending, other = error.`,
 func init() {
 	diffCmd.Flags().StringVar(&flagService, "service", "", "limit to features tagged with this service (default: every service in flags/)")
 	diffCmd.Flags().StringVar(&flagFlagsDir, "flags-dir", "flags", "directory containing *.yaml desired-state files")
+	diffCmd.Flags().BoolVar(&flagArchiveMissing, "archive-missing", false, "treat remote features in scope with no local file as archive candidates (requires --service)")
 	rootCmd.AddCommand(diffCmd)
+}
+
+// requireServiceForArchiveMissing enforces spec §6.1: --archive-missing
+// requires --service, since scope can't be inferred from local files once
+// the last file for a service is gone.
+func requireServiceForArchiveMissing() error {
+	if flagArchiveMissing && flagService == "" {
+		return fmt.Errorf("--archive-missing requires --service")
+	}
+	return nil
 }
 
 // runDiffScoped runs the fetch+ownership+diff pipeline for one service and
 // returns the comparison result. Shared by diff and apply so both commands
 // see identical output (spec §6.3).
-func runDiffScoped(ctx context.Context, c *client.Client, conn *connection, service string, files []*state.File) (differ.Result, []ownership.Conflict, error) {
+func runDiffScoped(ctx context.Context, c *client.Client, conn *connection, service string, files []*state.File, archiveMissing bool) (differ.Result, []ownership.Conflict, error) {
 	scoped := state.FilterByService(files, service)
 
 	// Unleash's tag-scoped export filters on tag_value only, ignoring tag_type
@@ -54,7 +65,7 @@ func runDiffScoped(ctx context.Context, c *client.Client, conn *connection, serv
 		return differ.Result{}, conflicts, nil
 	}
 
-	result := differ.Diff(scoped, remote, conn.Environment, conn.ContextName, conn.UIManagedEnabled)
+	result := differ.Diff(scoped, remote, conn.Environment, conn.ContextName, conn.UIManagedEnabled, archiveMissing)
 	return result, nil, nil
 }
 
@@ -70,6 +81,10 @@ func servicesInScope(files []*state.File) ([]string, error) {
 }
 
 func runDiff(_ *cobra.Command, _ []string) error {
+	if err := requireServiceForArchiveMissing(); err != nil {
+		return err
+	}
+
 	conn, err := resolveConnection()
 	if err != nil {
 		return err
@@ -94,7 +109,7 @@ func runDiff(_ *cobra.Command, _ []string) error {
 
 	hasChanges := false
 	for _, service := range services {
-		result, conflicts, err := runDiffScoped(ctx, c, conn, service, files)
+		result, conflicts, err := runDiffScoped(ctx, c, conn, service, files, flagArchiveMissing)
 		if err != nil {
 			return err
 		}

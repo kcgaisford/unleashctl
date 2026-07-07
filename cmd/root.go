@@ -14,10 +14,12 @@ var (
 	flagToken       string
 	flagEnvironment string
 	flagOutput      string
-	flagService     string
-	flagYes         bool
-	flagDryRun      bool
-	flagFlagsDir    string
+	flagService        string
+	flagYes            bool
+	flagDryRun         bool
+	flagFlagsDir       string
+	flagArchiveMissing bool
+	flagInteractive    bool
 )
 
 // defaultProject is the only project OSS Unleash has (spec §1: "One

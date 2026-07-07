@@ -128,7 +128,22 @@ other non-zero on error — handy for CI gating.
 
 `diff`/`apply` are additive-only by default: a remote feature tagged with a
 service but missing a local file is reported informationally, never treated
-as a delete (`--archive-missing` from the spec isn't built yet).
+as a delete.
+
+### `--archive-missing`: explicit cleanup
+
+Pass `--archive-missing` (requires `--service`) to turn that informational
+list into real archive candidates instead:
+
+```
+unleashctl diff  --context dev --service payments --archive-missing         # review candidates, exit 2 if any
+unleashctl apply --context dev --service payments --archive-missing --yes   # archive them, one batch confirmation
+unleashctl apply --context dev --service payments --archive-missing -i      # confirm/skip/abort one flag at a time
+```
+
+`-i`/`--interactive` and `--yes` are mutually exclusive. Without either,
+`apply --archive-missing` prints the full candidate list and asks for one
+confirmation covering the whole batch.
 
 ## Multiple repos, one instance
 

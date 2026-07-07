@@ -31,7 +31,7 @@ func Diff(w io.Writer, format string, result differ.Result) error {
 }
 
 func diffTable(w io.Writer, result differ.Result) error {
-	if len(result.Changes) == 0 {
+	if !result.HasChanges() {
 		fmt.Fprintln(w, "No changes.")
 	}
 	for _, c := range result.Changes {
@@ -44,6 +44,12 @@ func diffTable(w io.Writer, result differ.Result) error {
 	if len(result.Informational) > 0 {
 		fmt.Fprintf(w, "\n%d flag(s) in this service have no local file — not archiving; rerun with --archive-missing to review:\n", len(result.Informational))
 		for _, name := range result.Informational {
+			fmt.Fprintf(w, "  %s\n", name)
+		}
+	}
+	if len(result.Archive) > 0 {
+		fmt.Fprintf(w, "\n%d flag(s) in this service have no local file — will be archived (--archive-missing):\n", len(result.Archive))
+		for _, name := range result.Archive {
 			fmt.Fprintf(w, "  %s\n", name)
 		}
 	}

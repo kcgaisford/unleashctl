@@ -12,13 +12,20 @@ import (
 	"github.com/kcgaisford/unleashctl/internal/state"
 )
 
-// Action is what diff/apply would do for a given feature. Phase 1 is
-// additive-only (spec §6.1) — there is no ActionArchive here.
+// Action is what diff/apply would do for a given feature. Archiving is
+// handled separately via Result.Archive, not as an Action here, since it's
+// opt-in (--archive-missing, spec §6.1) and goes through a different Admin
+// API call (batch archive, not import) than create/update.
 type Action string
 
 const (
 	ActionCreate Action = "create"
 	ActionUpdate Action = "update"
+	// ActionRevive marks a local file whose feature exists remotely but is
+	// archived — cmd/diff.go detects this (Diff itself has no live client to
+	// check archived state, since ExportByTag never returns archived
+	// features at all) and rewrites the Change in place from ActionCreate.
+	ActionRevive Action = "revive"
 )
 
 // Change describes one pending create/update for a single feature.
@@ -33,13 +40,17 @@ type Change struct {
 type Result struct {
 	Changes []Change
 	// Informational lists remote feature names tagged with this service that
-	// have no matching local file. Never treated as delete candidates unless
-	// --archive-missing is passed (spec §6.1) — not implemented in Phase 1.
+	// have no matching local file. Set only when archiveMissing is false —
+	// never treated as delete candidates in that case (spec §6.1).
 	Informational []string
+	// Archive lists remote feature names tagged with this service that have
+	// no matching local file, when archiveMissing is true (spec §6.1). Set
+	// instead of Informational, never both.
+	Archive []string
 }
 
-// HasChanges reports whether any create/update is pending.
-func (r Result) HasChanges() bool { return len(r.Changes) > 0 }
+// HasChanges reports whether any create/update/archive is pending.
+func (r Result) HasChanges() bool { return len(r.Changes) > 0 || len(r.Archive) > 0 }
 
 type normStrategy struct {
 	Name       string
@@ -53,7 +64,7 @@ type normStrategy struct {
 // uiManagedEnabled, when true, skips comparing "enabled" entirely — the
 // live value is authoritative and never reported as pending (see
 // Context.UIManagedEnabled).
-func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, context string, uiManagedEnabled bool) Result {
+func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, context string, uiManagedEnabled, archiveMissing bool) Result {
 	remoteFeatures := make(map[string]gen.FeatureSchema, len(remote.Features))
 	for _, f := range remote.Features {
 		remoteFeatures[f.Name] = f
@@ -95,6 +106,22 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 			continue
 		}
 
+		// Archived features still come back from ExportByTag (confirmed
+		// against a live instance — the tag-scoped export path doesn't
+		// filter archived out, unlike the full-state export), so this is
+		// detectable straight off the fetched data with no extra API call.
+		// Skip the normal field-by-field diff entirely while archived: an
+		// archived feature's type/strategies/etc. reflect whatever they were
+		// at archive time, not a real drift to report.
+		if rf.Archived != nil && *rf.Archived {
+			changes = append(changes, Change{
+				FeatureName: name,
+				Action:      ActionRevive,
+				Details:     []string{"feature is archived remotely — will revive on apply"},
+			})
+			continue
+		}
+
 		var details []string
 
 		if resolved.Type != nil && (rf.Type == nil || *rf.Type != *resolved.Type) {
@@ -125,15 +152,25 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 	}
 
 	var informational []string
-	for name := range remoteFeatures {
-		if !localNames[name] {
+	var archive []string
+	for name, rf := range remoteFeatures {
+		if localNames[name] {
+			continue
+		}
+		if rf.Archived != nil && *rf.Archived {
+			continue // already archived - nothing to do
+		}
+		if archiveMissing {
+			archive = append(archive, name)
+		} else {
 			informational = append(informational, name)
 		}
 	}
 	sort.Strings(informational)
+	sort.Strings(archive)
 	sort.Slice(changes, func(i, j int) bool { return changes[i].FeatureName < changes[j].FeatureName })
 
-	return Result{Changes: changes, Informational: informational}
+	return Result{Changes: changes, Informational: informational, Archive: archive}
 }
 
 func normalizeLocal(strategies *[]state.Strategy) []normStrategy {

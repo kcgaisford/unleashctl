@@ -19,7 +19,7 @@ func TestDiffCreate(t *testing.T) {
 	}
 	remote := &gen.ExportResultSchema{Features: []gen.FeatureSchema{}, FeatureStrategies: []gen.FeatureStrategySchema{}}
 
-	result := Diff(files, remote, "production", "prod", false)
+	result := Diff(files, remote, "production", "prod", false, false)
 	if len(result.Changes) != 1 || result.Changes[0].Action != ActionCreate {
 		t.Fatalf("want one create, got %+v", result.Changes)
 	}
@@ -41,7 +41,7 @@ func TestDiffUpdateOnEnabledMismatch(t *testing.T) {
 		FeatureStrategies: []gen.FeatureStrategySchema{},
 	}
 
-	result := Diff(files, remote, "production", "prod", false)
+	result := Diff(files, remote, "production", "prod", false, false)
 	if len(result.Changes) != 1 || result.Changes[0].Action != ActionUpdate {
 		t.Fatalf("want one update, got %+v", result.Changes)
 	}
@@ -72,7 +72,7 @@ func TestDiffNoChangesWhenIdentical(t *testing.T) {
 		},
 	}
 
-	result := Diff(files, remote, "production", "prod", false)
+	result := Diff(files, remote, "production", "prod", false, false)
 	if len(result.Changes) != 0 {
 		t.Fatalf("want no changes, got %+v", result.Changes)
 	}
@@ -85,12 +85,57 @@ func TestDiffInformationalForUnmatchedRemote(t *testing.T) {
 		FeatureStrategies: []gen.FeatureStrategySchema{},
 	}
 
-	result := Diff(files, remote, "production", "prod", false)
+	result := Diff(files, remote, "production", "prod", false, false)
 	if len(result.Changes) != 0 {
 		t.Fatalf("want no changes (additive-only default), got %+v", result.Changes)
 	}
 	if len(result.Informational) != 1 || result.Informational[0] != "retired-flag" {
 		t.Fatalf("want retired-flag reported informationally, got %v", result.Informational)
+	}
+}
+
+// TestDiffArchiveMissingMovesInformationalToArchive verifies that
+// archiveMissing=true routes remote-only names into Archive instead of
+// Informational, and HasChanges reflects the pending archive.
+func TestDiffArchiveMissingMovesInformationalToArchive(t *testing.T) {
+	var files []*state.File
+	remote := &gen.ExportResultSchema{
+		Features:          []gen.FeatureSchema{{Name: "retired-flag"}},
+		FeatureStrategies: []gen.FeatureStrategySchema{},
+	}
+
+	result := Diff(files, remote, "production", "prod", false, true)
+	if len(result.Informational) != 0 {
+		t.Fatalf("want no informational names when archiveMissing, got %v", result.Informational)
+	}
+	if len(result.Archive) != 1 || result.Archive[0] != "retired-flag" {
+		t.Fatalf("want retired-flag as an archive candidate, got %v", result.Archive)
+	}
+	if !result.HasChanges() {
+		t.Fatalf("want HasChanges true for an archive-only result")
+	}
+}
+
+// TestDiffArchivedRemoteFeatureProposesRevive verifies that a local file
+// whose remote feature is archived (still returned by ExportByTag, per a
+// live-instance check — the tag-scoped export doesn't filter archived out)
+// produces a single ActionRevive change instead of a spurious update diff.
+func TestDiffArchivedRemoteFeatureProposesRevive(t *testing.T) {
+	name := "email-verification"
+	files := []*state.File{
+		{
+			Metadata: state.Metadata{Name: name, Service: "other-repo"},
+			Spec:     state.Spec{Enabled: boolPtrT(true), Type: strPtrT("release")},
+		},
+	}
+	remote := &gen.ExportResultSchema{
+		Features:          []gen.FeatureSchema{{Name: name, Type: strPtrT("release"), Archived: boolPtrT(true)}},
+		FeatureStrategies: []gen.FeatureStrategySchema{},
+	}
+
+	result := Diff(files, remote, "development", "dev", false, false)
+	if len(result.Changes) != 1 || result.Changes[0].Action != ActionRevive {
+		t.Fatalf("want one revive, got %+v", result.Changes)
 	}
 }
 
@@ -122,7 +167,7 @@ func TestDiffNoChangesForParameterlessStrategy(t *testing.T) {
 		},
 	}
 
-	result := Diff(files, remote, "production", "prod", false)
+	result := Diff(files, remote, "production", "prod", false, false)
 	if len(result.Changes) != 0 {
 		t.Fatalf("want no changes, got %+v", result.Changes)
 	}
@@ -147,7 +192,7 @@ func TestDiffSkipsEnabledWhenUIManaged(t *testing.T) {
 		FeatureStrategies: []gen.FeatureStrategySchema{},
 	}
 
-	result := Diff(files, remote, "production", "prod", true)
+	result := Diff(files, remote, "production", "prod", true, false)
 	if len(result.Changes) != 0 {
 		t.Fatalf("want no changes with uiManagedEnabled, got %+v", result.Changes)
 	}
