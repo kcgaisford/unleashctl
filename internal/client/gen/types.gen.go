@@ -460,6 +460,30 @@ type ContextFieldSchema struct {
 	UsedInProjects *int `json:"usedInProjects,omitempty"`
 }
 
+// ContextFieldsSchema A list of context fields
+type ContextFieldsSchema = []ContextFieldSchema
+
+// CreateContextFieldSchema Data used to create a context field configuration.
+type CreateContextFieldSchema struct {
+	// Description A description of the context field
+	Description *string `json:"description,omitempty"`
+
+	// LegalValues A list of allowed values for this context field
+	LegalValues *[]LegalValueSchema `json:"legalValues,omitempty"`
+
+	// Name The name of the context field.
+	Name string `json:"name"`
+
+	// Project The project this context field belongs to (if it is project-specific)
+	Project *string `json:"project,omitempty"`
+
+	// SortOrder How this context field should be sorted if no other sort order is selected
+	SortOrder *int `json:"sortOrder,omitempty"`
+
+	// Stickiness `true` if this field should be available for use with [custom stickiness](https://docs.getunleash.io/concepts/stickiness#custom-stickiness), otherwise `false`
+	Stickiness *bool `json:"stickiness,omitempty"`
+}
+
 // CreateStrategyVariantSchema This is an experimental property. It may change or be removed as we work on it. Please don't depend on it yet. A strategy variant allows you to attach any data to strategies instead of only returning `true`/`false`. Strategy variants take precedence over feature variants.
 type CreateStrategyVariantSchema struct {
 	// Name The variant name. Must be unique for this feature flag
@@ -1222,6 +1246,24 @@ type TagTypeSchema struct {
 
 	// Name The name of the tag type.
 	Name string `json:"name"`
+}
+
+// UpdateContextFieldSchema Data to update an existing context field configuration.
+type UpdateContextFieldSchema struct {
+	// Description A description of the context field
+	Description *string `json:"description,omitempty"`
+
+	// LegalValues A list of allowed values for this context field
+	LegalValues *[]LegalValueSchema `json:"legalValues,omitempty"`
+
+	// Project The project this context field belongs to (if it is project-specific)
+	Project *string `json:"project,omitempty"`
+
+	// SortOrder How this context field should be sorted if no other sort order is selected
+	SortOrder *int `json:"sortOrder,omitempty"`
+
+	// Stickiness `true` if this field should be available for use with [custom stickiness](https://docs.getunleash.io/concepts/stickiness#custom-stickiness), otherwise `false`
+	Stickiness *bool `json:"stickiness,omitempty"`
 }
 
 // VariantSchema A variant allows for further separation of users into segments. See [our excellent documentation](https://docs.getunleash.io/concepts/feature-flag-variants#what-are-variants) for a more detailed description

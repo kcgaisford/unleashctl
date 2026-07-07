@@ -15,6 +15,8 @@ roots = [
     "tagSchema", "environmentSchema", "environmentsSchema",
     "importTogglesSchema", "importTogglesValidateSchema", "importTogglesValidateItemSchema",
     "exportResultSchema", "exportQuerySchema",
+    "contextFieldSchema", "contextFieldsSchema",
+    "createContextFieldSchema", "updateContextFieldSchema",
 ]
 
 ref_re = re.compile(r"#/components/schemas/([A-Za-z0-9_]+)")

@@ -173,6 +173,49 @@ tagged with a service present in that directory, and `apply` hard-refuses
 (no silent overwrite) if a local file's name collides with a remote feature
 tagged with a *different* service, or with no service tag at all.
 
+## Author contexts/*.yaml — custom context fields
+
+Unleash's *custom context fields* (`name`/`description`/`stickiness`/
+`sortOrder`/`legalValues`) are a separate, unrelated concept from the
+`context` command above (which manages CLI connection profiles) — the
+naming collision is unfortunate but both terms are Unleash's own. Custom
+context fields are global to an instance, not scoped per
+project/environment/service like Feature flags, so there's no
+`envOverride`/`contextOverride`/`links`/`tags` for this kind. Each field is
+one file under `contexts/`:
+
+```yaml
+apiVersion: unleashctl/v1
+kind: ContextField
+metadata:
+  name: subscriptionTier
+spec:
+  description: The user's subscription tier
+  stickiness: true
+  sortOrder: 10
+  legalValues:
+    - value: gold
+      description: Gold tier
+    - value: silver
+```
+
+`metadata.name` is immutable — Unleash has no rename endpoint, so renaming
+it here creates a new field and orphans the old one (reported
+informationally, or deleted with `--delete-missing`, same as below).
+
+```
+unleashctl context-fields diff  --context dev                  # what would change
+unleashctl context-fields apply --context dev --yes             # apply it
+unleashctl context-fields apply --context dev --dry-run          # print planned requests only
+```
+
+Same exit-code convention as `diff`/`apply` (`0`/`2`/error). There's no
+batch import endpoint for context fields, so `apply` creates/updates each
+one individually. `--delete-missing`, `--yes`, `-i`/`--interactive` work the
+same way as Feature's `--archive-missing` (see above) — pass
+`--delete-missing` to turn remote-only fields from informational into real
+delete candidates.
+
 ## Regenerating API types
 
 `internal/client/gen/types.gen.go` is generated from a live instance's

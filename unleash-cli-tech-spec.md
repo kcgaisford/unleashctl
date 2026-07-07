@@ -29,7 +29,7 @@ instance). Two layers:
      touches local files.
 
 Non-goal: this is not a general Unleash Admin UI replacement — no
-user/RBAC management in v1 (see §9).
+user/RBAC management in v1 (see §10).
 
 ### Scope: built for Unleash OSS
 
@@ -590,7 +590,52 @@ unleashctl apply --context prod --service payments --archive-missing --yes
 
 ---
 
-## 8. Implementation notes
+## 8. `ContextField` spec kind — custom context fields
+
+Unleash's *custom context fields* (`name`/`description`/`stickiness`/
+`sortOrder`/`legalValues`, see Unleash's own context-field docs) are an
+entirely separate concept from the `context` word used everywhere else in
+this spec (§2's kubectl-style CLI connection profiles) — they happen to
+share a name with no other relationship. Unlike `Feature`, this kind is
+global to an instance: no project/environment/service scoping, so no
+`envOverride`/`contextOverride`/`links`/`tags`, and no `--service` flag on
+its commands.
+
+One file per field, under `contexts/*.yaml`:
+
+```yaml
+apiVersion: unleashctl/v1
+kind: ContextField
+metadata:
+  name: subscriptionTier   # immutable — no rename endpoint; renaming here
+                            # creates a new field and orphans the old one
+spec:
+  description: The user's subscription tier
+  stickiness: true
+  sortOrder: 10
+  legalValues:
+    - value: gold
+      description: Gold tier
+```
+
+Commands, grouped under `context-fields` to avoid colliding with the
+existing `context` command:
+
+```
+unleashctl context-fields diff  --context dev                  # what would change
+unleashctl context-fields apply --context dev --yes             # apply it
+unleashctl context-fields apply --context dev --dry-run          # print planned requests only
+unleashctl context-fields apply --context dev --delete-missing --yes   # + delete remote-only fields
+```
+
+Same exit-code convention as §6 (`0`/`2`/error). There's no batch
+import/export endpoint for context fields (unlike Feature's
+`features-batch/*`), so `apply` calls the Admin API's create/update/delete
+endpoints individually per field, one request per change.
+
+---
+
+## 9. Implementation notes
 
 - **HTTP client**: `internal/client` wraps `net/http` with retry/backoff
   (429/5xx), consistent auth header injection, and typed request/response
@@ -615,7 +660,7 @@ unleashctl apply --context prod --service payments --archive-missing --yes
 
 ---
 
-## 9. Open questions / v2 candidates
+## 10. Open questions / v2 candidates
 
 - User/role management commands (out of scope v1).
 - Change-request-aware `apply` (auto-detect CR creation, poll for

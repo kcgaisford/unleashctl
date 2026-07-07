@@ -69,3 +69,54 @@ func diffTable(w io.Writer, result differ.Result) error {
 	}
 	return nil
 }
+
+// ContextDiff writes result to w in the requested format ("table", "json", "yaml").
+// An unrecognized format falls back to "table".
+func ContextDiff(w io.Writer, format string, result differ.ContextResult) error {
+	switch format {
+	case "json":
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	case "yaml":
+		enc := yaml.NewEncoder(w)
+		defer enc.Close()
+		return enc.Encode(result)
+	default:
+		return contextDiffTable(w, result)
+	}
+}
+
+func contextActionSymbol(a differ.ContextAction) string {
+	if a == differ.ContextActionCreate {
+		return "+"
+	}
+	return "~"
+}
+
+func contextDiffTable(w io.Writer, result differ.ContextResult) error {
+	if !result.HasChanges() {
+		fmt.Fprintln(w, "No changes.")
+	}
+	for _, c := range result.Changes {
+		sym := contextActionSymbol(c.Action)
+		action := strings.ToUpper(string(c.Action))
+		fmt.Fprintf(w, "%s %-7s %s\n", sym, action, c.Name)
+		for _, d := range c.Details {
+			fmt.Fprintf(w, "    %s %s\n", sym, d)
+		}
+	}
+	if len(result.Informational) > 0 {
+		fmt.Fprintf(w, "\n%d context field(s) have no local file — not deleting; rerun with --delete-missing to review:\n", len(result.Informational))
+		for _, name := range result.Informational {
+			fmt.Fprintf(w, "  %s\n", name)
+		}
+	}
+	if len(result.Delete) > 0 {
+		fmt.Fprintf(w, "\n%d context field(s) have no local file — will be deleted (--delete-missing):\n", len(result.Delete))
+		for _, name := range result.Delete {
+			fmt.Fprintf(w, "  %s\n", name)
+		}
+	}
+	return nil
+}

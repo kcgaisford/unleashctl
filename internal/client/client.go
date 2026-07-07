@@ -208,3 +208,31 @@ func (c *Client) GetFeatureTags(ctx context.Context, name string) ([]gen.TagSche
 	}
 	return out.Tags, nil
 }
+
+// ListContextFields lists every custom context field configured on this
+// instance. Context fields are global, not scoped to project/environment.
+func (c *Client) ListContextFields(ctx context.Context) ([]gen.ContextFieldSchema, error) {
+	var out []gen.ContextFieldSchema
+	if err := c.do(ctx, http.MethodGet, "/api/admin/context", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreateContextField creates a new custom context field.
+func (c *Client) CreateContextField(ctx context.Context, req gen.CreateContextFieldSchema) error {
+	return c.do(ctx, http.MethodPost, "/api/admin/context", req, nil)
+}
+
+// UpdateContextField updates an existing custom context field by name.
+// There is no rename endpoint — name isn't part of UpdateContextFieldSchema.
+func (c *Client) UpdateContextField(ctx context.Context, name string, req gen.UpdateContextFieldSchema) error {
+	path := fmt.Sprintf("/api/admin/context/%s", name)
+	return c.do(ctx, http.MethodPut, path, req, nil)
+}
+
+// DeleteContextField deletes a custom context field by name.
+func (c *Client) DeleteContextField(ctx context.Context, name string) error {
+	path := fmt.Sprintf("/api/admin/context/%s", name)
+	return c.do(ctx, http.MethodDelete, path, nil, nil)
+}

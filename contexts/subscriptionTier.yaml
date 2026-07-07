@@ -1,0 +1,15 @@
+apiVersion: unleashctl/v1
+kind: ContextField
+metadata:
+  name: subscriptionTier
+spec:
+  description: The user's subscription tier
+  stickiness: true
+  sortOrder: 10
+  legalValues:
+    - value: gold
+      description: Gold tier
+    - value: silver
+      description: Silver tier
+    - value: bronze
+      description: Bronze tier

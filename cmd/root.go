@@ -9,17 +9,19 @@ import (
 )
 
 var (
-	flagContext     string
-	flagURL         string
-	flagToken       string
-	flagEnvironment string
-	flagOutput      string
+	flagContext        string
+	flagURL            string
+	flagToken          string
+	flagEnvironment    string
+	flagOutput         string
 	flagService        string
 	flagYes            bool
 	flagDryRun         bool
 	flagFlagsDir       string
 	flagArchiveMissing bool
 	flagInteractive    bool
+	flagContextsDir    string
+	flagDeleteMissing  bool
 )
 
 // defaultProject is the only project OSS Unleash has (spec §1: "One
