@@ -10,6 +10,9 @@ spec:
   strategies:
     - name: flexibleRollout
       parameters: { rollout: "100", stickiness: userId, groupId: beta-dashboard }
+links:
+  - url: https://wiki.internal/beta-dashboard
+    title: Beta cohort rollout plan
 envOverride:
   production:
     strategies:

@@ -7,9 +7,13 @@ spec:
   type: release
   description: Rewritten refunds pipeline
   enabled: true
+  impressionData: false
   strategies:
     - name: flexibleRollout
       parameters: { rollout: "10", stickiness: userId, groupId: refunds-v2 }
+tags:
+  - type: team
+    value: payments-platform
 envOverride:
   development:
     strategies:
