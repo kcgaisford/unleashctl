@@ -176,7 +176,7 @@ tagged with a *different* service, or with no service tag at all.
 ## Author contexts/*.yaml — custom context fields
 
 Unleash's *custom context fields* (`name`/`description`/`stickiness`/
-`sortOrder`/`legalValues`) are a separate, unrelated concept from the
+`legalValues`) are a separate, unrelated concept from the
 `context` command above (which manages CLI connection profiles) — the
 naming collision is unfortunate but both terms are Unleash's own. Custom
 context fields are global to an instance, not scoped per
@@ -192,7 +192,6 @@ metadata:
 spec:
   description: The user's subscription tier
   stickiness: true
-  sortOrder: 10
   legalValues:
     - value: gold
       description: Gold tier

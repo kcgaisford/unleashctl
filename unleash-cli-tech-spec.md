@@ -593,7 +593,7 @@ unleashctl apply --context prod --service payments --archive-missing --yes
 ## 8. `ContextField` spec kind — custom context fields
 
 Unleash's *custom context fields* (`name`/`description`/`stickiness`/
-`sortOrder`/`legalValues`, see Unleash's own context-field docs) are an
+`legalValues`, see Unleash's own context-field docs) are an
 entirely separate concept from the `context` word used everywhere else in
 this spec (§2's kubectl-style CLI connection profiles) — they happen to
 share a name with no other relationship. Unlike `Feature`, this kind is
@@ -612,11 +612,16 @@ metadata:
 spec:
   description: The user's subscription tier
   stickiness: true
-  sortOrder: 10
   legalValues:
     - value: gold
       description: Gold tier
 ```
+
+`sortOrder` (also part of Unleash's context-field API) is deliberately left
+out of this spec: Unleash's own UI never exposes it for editing (the
+create/edit form has no such field, and the list view's `sortOrder` column
+is hidden by default), and its update endpoint silently discards/resets it
+server-side — not a field worth managing declaratively.
 
 Commands, grouped under `context-fields` to avoid colliding with the
 existing `context` command:

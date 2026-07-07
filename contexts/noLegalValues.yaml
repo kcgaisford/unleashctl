@@ -1,0 +1,7 @@
+apiVersion: unleashctl/v1
+kind: ContextField
+metadata:
+  name: noLegalValues
+spec:
+  description: no Legal Values set
+  stickiness: true

@@ -15,7 +15,6 @@ metadata:
 spec:
   description: The user's subscription tier
   stickiness: true
-  sortOrder: 10
   legalValues:
     - value: gold
       description: Gold tier
@@ -38,9 +37,6 @@ spec:
 	}
 	if f.Spec.Stickiness == nil || !*f.Spec.Stickiness {
 		t.Fatalf("Stickiness = %v, want true", f.Spec.Stickiness)
-	}
-	if f.Spec.SortOrder == nil || *f.Spec.SortOrder != 10 {
-		t.Fatalf("SortOrder = %v, want 10", f.Spec.SortOrder)
 	}
 	if f.Spec.LegalValues == nil || len(*f.Spec.LegalValues) != 2 {
 		t.Fatalf("LegalValues = %v, want 2 entries", f.Spec.LegalValues)

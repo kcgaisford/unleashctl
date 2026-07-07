@@ -86,9 +86,6 @@ func DiffContexts(files []*state.ContextFile, remote []gen.ContextFieldSchema, d
 		if spec.Stickiness != nil && (rf.Stickiness == nil || *rf.Stickiness != *spec.Stickiness) {
 			details = append(details, fmt.Sprintf("stickiness: %t -> %t", derefBool(rf.Stickiness), *spec.Stickiness))
 		}
-		if spec.SortOrder != nil && (rf.SortOrder == nil || *rf.SortOrder != *spec.SortOrder) {
-			details = append(details, fmt.Sprintf("sortOrder: %d -> %d", derefInt(rf.SortOrder), *spec.SortOrder))
-		}
 
 		localValues := normalizeLocalLegalValues(spec.LegalValues)
 		remoteValues := normalizeRemoteLegalValues(rf.LegalValues)
@@ -132,9 +129,6 @@ func contextSpecDetails(spec state.ContextSpec) []string {
 	if spec.Stickiness != nil {
 		d = append(d, fmt.Sprintf("stickiness: %t", *spec.Stickiness))
 	}
-	if spec.SortOrder != nil {
-		d = append(d, fmt.Sprintf("sortOrder: %d", *spec.SortOrder))
-	}
 	if spec.LegalValues != nil && len(*spec.LegalValues) > 0 {
 		d = append(d, fmt.Sprintf("legalValues: %s", formatNormLegalValues(normalizeLocalLegalValues(spec.LegalValues))))
 	}
@@ -143,10 +137,17 @@ func contextSpecDetails(spec state.ContextSpec) []string {
 
 // normalizeLocalLegalValues/normalizeRemoteLegalValues sort by value so
 // legalValues: order in the YAML (or the order Unleash returns them in)
-// never causes a spurious diff — only set membership matters.
+// never causes a spurious diff — only set membership matters. A nil list and
+// an empty list both normalize to the same non-nil empty slice: Unleash
+// always round-trips legalValues as [] rather than omitting it, while a
+// local file with no legalValues: block resolves to a nil pointer. Without
+// this, reflect.DeepEqual would treat nil and []normLegalValue{} as
+// different forever, showing a spurious "(none) -> (none)" update on every
+// diff even when both sides are genuinely empty (same class of bug
+// normalizeParams in differ.go fixes for strategy parameters).
 func normalizeLocalLegalValues(values *[]state.LegalValue) []normLegalValue {
-	if values == nil {
-		return nil
+	if values == nil || len(*values) == 0 {
+		return []normLegalValue{}
 	}
 	out := make([]normLegalValue, len(*values))
 	for i, v := range *values {
@@ -157,8 +158,8 @@ func normalizeLocalLegalValues(values *[]state.LegalValue) []normLegalValue {
 }
 
 func normalizeRemoteLegalValues(values *[]gen.LegalValueSchema) []normLegalValue {
-	if values == nil {
-		return nil
+	if values == nil || len(*values) == 0 {
+		return []normLegalValue{}
 	}
 	out := make([]normLegalValue, len(*values))
 	for i, v := range *values {
@@ -181,11 +182,4 @@ func formatNormLegalValues(values []normLegalValue) string {
 		}
 	}
 	return strings.Join(parts, ", ")
-}
-
-func derefInt(i *int) int {
-	if i == nil {
-		return 0
-	}
-	return *i
 }

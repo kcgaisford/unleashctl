@@ -3,9 +3,8 @@ kind: ContextField
 metadata:
   name: subscriptionTier
 spec:
-  description: The user's subscription tier
+  description: The user's subscription tier gold,silver,bronze
   stickiness: true
-  sortOrder: 10
   legalValues:
     - value: gold
       description: Gold tier

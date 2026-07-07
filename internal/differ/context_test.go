@@ -45,7 +45,6 @@ func TestDiffContextsNoChangesWhenIdentical(t *testing.T) {
 			Spec: state.ContextSpec{
 				Description: strPtrT("desc"),
 				Stickiness:  boolPtrT(true),
-				SortOrder:   intPtrT(10),
 				LegalValues: &[]state.LegalValue{
 					{Value: "gold"},
 					{Value: "silver"},
@@ -58,7 +57,6 @@ func TestDiffContextsNoChangesWhenIdentical(t *testing.T) {
 			Name:        "subscriptionTier",
 			Description: strPtrT("desc"),
 			Stickiness:  boolPtrT(true),
-			SortOrder:   intPtrT(10),
 			LegalValues: &[]gen.LegalValueSchema{
 				{Value: "silver"},
 				{Value: "gold"},
@@ -104,4 +102,25 @@ func TestDiffContextsDeleteMissingMovesInformationalToDelete(t *testing.T) {
 	}
 }
 
-func intPtrT(i int) *int { return &i }
+// TestDiffContextsNoChangesForNilVsEmptyLegalValues is a regression test: a
+// local file with no legalValues: block resolves to a nil pointer, while
+// Unleash always round-trips legalValues as [] rather than omitting it.
+// Without normalizing nil/empty as equal, this showed a spurious
+// "(none) -> (none)" update on every diff, forever.
+func TestDiffContextsNoChangesForNilVsEmptyLegalValues(t *testing.T) {
+	files := []*state.ContextFile{
+		{
+			Metadata: state.Metadata{Name: "noLegalValues"},
+			Spec:     state.ContextSpec{Stickiness: boolPtrT(true)},
+		},
+	}
+	empty := []gen.LegalValueSchema{}
+	remote := []gen.ContextFieldSchema{
+		{Name: "noLegalValues", Stickiness: boolPtrT(true), LegalValues: &empty},
+	}
+
+	result := DiffContexts(files, remote, false)
+	if len(result.Changes) != 0 {
+		t.Fatalf("want no changes for nil-vs-empty legalValues, got %+v", result.Changes)
+	}
+}

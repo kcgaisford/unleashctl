@@ -214,7 +214,6 @@ func buildCreateContextFieldRequest(file *state.ContextFile) gen.CreateContextFi
 		Name:        file.Metadata.Name,
 		Description: file.Spec.Description,
 		Stickiness:  file.Spec.Stickiness,
-		SortOrder:   file.Spec.SortOrder,
 		LegalValues: toGenLegalValues(file.Spec.LegalValues),
 	}
 }
@@ -223,7 +222,6 @@ func buildUpdateContextFieldRequest(file *state.ContextFile) gen.UpdateContextFi
 	return gen.UpdateContextFieldSchema{
 		Description: file.Spec.Description,
 		Stickiness:  file.Spec.Stickiness,
-		SortOrder:   file.Spec.SortOrder,
 		LegalValues: toGenLegalValues(file.Spec.LegalValues),
 	}
 }

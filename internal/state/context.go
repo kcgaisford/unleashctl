@@ -22,7 +22,6 @@ type LegalValue struct {
 type ContextSpec struct {
 	Description *string       `yaml:"description,omitempty"`
 	Stickiness  *bool         `yaml:"stickiness,omitempty"`
-	SortOrder   *int          `yaml:"sortOrder,omitempty"`
 	LegalValues *[]LegalValue `yaml:"legalValues,omitempty"`
 }
 
