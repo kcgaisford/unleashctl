@@ -478,8 +478,10 @@ time instead — confirm, skip, or abort per flag — for the case where
 someone actually wants to eyeball each one rather than trust the list as
 a whole. `-i` and `--yes` are mutually exclusive.
 
-Exit codes follow Terraform convention: `0` no changes, `2` changes
-pending (useful for gating in CI), non-zero-other on error.
+Exit codes: `0` whether or not changes are pending — drift alone is
+never a failure, so a diff-only CI job doesn't break just because
+something changed. `1` only on a real error (fetch failure, or a refused
+ownership conflict, §6.4). See `docs/Feature-spec.md`.
 
 ### 6.2 Drift detection
 
@@ -633,10 +635,11 @@ unleashctl context-fields apply --context dev --dry-run          # print planned
 unleashctl context-fields apply --context dev --delete-missing --yes   # + delete remote-only fields
 ```
 
-Same exit-code convention as §6 (`0`/`2`/error). There's no batch
-import/export endpoint for context fields (unlike Feature's
-`features-batch/*`), so `apply` calls the Admin API's create/update/delete
-endpoints individually per field, one request per change.
+Same exit-code convention as §6 (`0` regardless of pending changes, `1`
+on real error). There's no batch import/export endpoint for context
+fields (unlike Feature's `features-batch/*`), so `apply` calls the Admin
+API's create/update/delete endpoints individually per field, one
+request per change. See `docs/ContextField-spec.md`.
 
 ---
 
