@@ -120,3 +120,54 @@ func contextDiffTable(w io.Writer, result differ.ContextResult) error {
 	}
 	return nil
 }
+
+// SegmentDiff writes result to w in the requested format ("table", "json", "yaml").
+// An unrecognized format falls back to "table".
+func SegmentDiff(w io.Writer, format string, result differ.SegmentResult) error {
+	switch format {
+	case "json":
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	case "yaml":
+		enc := yaml.NewEncoder(w)
+		defer enc.Close()
+		return enc.Encode(result)
+	default:
+		return segmentDiffTable(w, result)
+	}
+}
+
+func segmentActionSymbol(a differ.SegmentAction) string {
+	if a == differ.SegmentActionCreate {
+		return "+"
+	}
+	return "~"
+}
+
+func segmentDiffTable(w io.Writer, result differ.SegmentResult) error {
+	if !result.HasChanges() {
+		fmt.Fprintln(w, "No changes.")
+	}
+	for _, c := range result.Changes {
+		sym := segmentActionSymbol(c.Action)
+		action := strings.ToUpper(string(c.Action))
+		fmt.Fprintf(w, "%s %-7s %s\n", sym, action, c.Name)
+		for _, d := range c.Details {
+			fmt.Fprintf(w, "    %s %s\n", sym, d)
+		}
+	}
+	if len(result.Informational) > 0 {
+		fmt.Fprintf(w, "\n%d segment(s) have no local file — not deleting; rerun with --delete-missing to review:\n", len(result.Informational))
+		for _, name := range result.Informational {
+			fmt.Fprintf(w, "  %s\n", name)
+		}
+	}
+	if len(result.Delete) > 0 {
+		fmt.Fprintf(w, "\n%d segment(s) have no local file — will be deleted (--delete-missing):\n", len(result.Delete))
+		for _, candidate := range result.Delete {
+			fmt.Fprintf(w, "  %s\n", candidate.Name)
+		}
+	}
+	return nil
+}

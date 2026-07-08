@@ -1,0 +1,6 @@
+apiVersion: unleashctl/v1
+kind: Segment
+metadata:
+  name: noConstraints
+spec:
+  description: Matches everyone (no constraints set)

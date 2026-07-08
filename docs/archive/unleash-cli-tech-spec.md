@@ -29,7 +29,7 @@ instance). Two layers:
      touches local files.
 
 Non-goal: this is not a general Unleash Admin UI replacement — no
-user/RBAC management in v1 (see §10).
+user/RBAC management in v1 (see §11).
 
 ### Scope: built for Unleash OSS
 
@@ -643,7 +643,56 @@ request per change. See `docs/ContextField-spec.md`.
 
 ---
 
-## 9. Implementation notes
+## 9. `Segment` spec kind — segments
+
+Unleash *segments* (`name`/`description`/`project`/`constraints`, see
+Unleash's own segment docs) are reusable constraint sets that can be
+attached to activation strategies. Like `ContextField`, this kind is
+global to an instance (or scoped to a single project via `project`): no
+`envOverride`/`contextOverride`/`links`/`tags`. Unlike `ContextField`,
+Unleash's segment API is id-keyed (`PUT`/`DELETE /api/admin/segments/{id}`)
+rather than name-keyed, so `diff`/`apply` match local files to remote
+segments by `metadata.name` and resolve the id internally to act on
+updates/deletes.
+
+One file per segment, under `segments/*.yaml`:
+
+```yaml
+apiVersion: unleashctl/v1
+kind: Segment
+metadata:
+  name: betaUsers   # matched by name; renaming here creates a new segment
+                     # and orphans the old one, same caveat as ContextField
+spec:
+  description: Users opted into the beta program
+  constraints:
+    - contextName: userId
+      operator: IN
+      values:
+        - user-1
+        - user-2
+```
+
+`constraints` may be omitted or empty (matches every user).
+
+Commands, grouped under `segments`:
+
+```
+unleashctl segments diff  --context dev                  # what would change
+unleashctl segments apply --context dev --yes             # apply it
+unleashctl segments apply --context dev --dry-run          # print planned requests only
+unleashctl segments apply --context dev --delete-missing --yes   # + delete remote-only segments
+```
+
+Same exit-code convention as §6 (`0` regardless of pending changes, `1`
+on real error). There's no batch import/export endpoint for segments
+(unlike Feature's `features-batch/*`), so `apply` calls the Admin API's
+create/update/delete endpoints individually per segment, one request per
+change. See `docs/Segment-spec.md`.
+
+---
+
+## 10. Implementation notes
 
 - **HTTP client**: `internal/client` wraps `net/http` with retry/backoff
   (429/5xx), consistent auth header injection, and typed request/response
@@ -668,7 +717,7 @@ request per change. See `docs/ContextField-spec.md`.
 
 ---
 
-## 10. Open questions / v2 candidates
+## 11. Open questions / v2 candidates
 
 - User/role management commands (out of scope v1).
 - Change-request-aware `apply` (auto-detect CR creation, poll for
@@ -680,10 +729,10 @@ request per change. See `docs/ContextField-spec.md`.
   capture. Worth deciding whether that's sufficient or whether some
   lightweight record is worth adding later — deliberately left out for
   now to keep the mechanism simple.
-- Segments/custom-strategies-as-code: currently treated as "must already
-  exist on target" per Unleash's own import rules — may need their own
-  CRUD + first-class representation in `flags/` if teams want them
-  GitOps-managed too, rather than being purely referenced by name.
+- Segments now have first-class CRUD via the `Segment` spec kind (§9).
+  Custom strategies are still treated as "must already exist on target"
+  per Unleash's own import rules — may need their own representation too
+  if teams want them GitOps-managed as well.
 - Ownership/service tags (§6.4) are a convention layered on top of
   Unleash's tag feature, not something Unleash enforces — nothing stops
   someone from manually deleting or changing a `service:*` tag outside

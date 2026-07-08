@@ -8,8 +8,9 @@ a cluster against your YAML. A "migration" is just a git-tracked change to
 those same files — there's no separate migration format to author.
 
 Built in Go on Cobra + Viper, wrapping the Unleash Admin API. Manifest specs:
-[`docs/Feature-spec.md`](./docs/Feature-spec.md) and
-[`docs/ContextField-spec.md`](./docs/ContextField-spec.md). 
+[`docs/Feature-spec.md`](./docs/Feature-spec.md),
+[`docs/ContextField-spec.md`](./docs/ContextField-spec.md), and
+[`docs/Segment-spec.md`](./docs/Segment-spec.md). 
 
 ## Prerequisites
 
@@ -127,6 +128,12 @@ and always apply regardless of environment/context — they don't go through
 
 ## Usage
 
+This repo bundles example manifests under `examples/` (`examples/flags`,
+`examples/contexts`, `examples/segments`) — pass `--flags-dir examples/flags`
+(and `--contexts-dir`/`--segments-dir` for those kinds) to try the commands
+below against them. In your own project, these directories live at the repo
+root and the defaults (`flags`, `contexts`, `segments`) just work.
+
 ```
 unleashctl diff --context dev                       # what would change
 unleashctl apply --context dev --yes                # apply it
@@ -158,14 +165,9 @@ confirmation covering the whole batch.
 
 ## Multiple repos, one instance
 
-`flags_other_repo/` in this repo simulates a *second* repo pointed at the
-same Unleash instance, with its own directory and its own `service` tag.
-Point `--flags-dir` at whichever directory represents "this
-repo" — in practice each repo just runs unleashctl against its own `flags/`:
-
-```
-unleashctl diff --context dev --flags-dir flags_other_repo
-```
+Point `--flags-dir` at whichever directory represents "this repo" — in
+practice each repo just runs unleashctl against its own `flags/`, each with
+its own `service` tag, all pointed at the same Unleash instance.
 
 Scoping is enforced two ways: reads are filtered server-side to features
 tagged with a service present in that directory, and `apply` hard-refuses
@@ -216,6 +218,51 @@ one individually. `--delete-missing`, `--yes`, `-i`/`--interactive` work the
 same way as Feature's `--archive-missing` (see above) — pass
 `--delete-missing` to turn remote-only fields from informational into real
 delete candidates.
+
+## Author segments/*.yaml — segments
+
+[`docs/Segment-spec.md`](./docs/Segment-spec.md)
+
+Unleash *segments* (`name`/`description`/`project`/`constraints`) are
+reusable constraint sets that can be attached to activation strategies.
+Like custom context fields, segments are global to an instance (or scoped
+to a single project via `project`), so there's no
+`envOverride`/`contextOverride`/`links`/`tags` for this kind. Each segment
+is one file under `segments/`:
+
+```yaml
+apiVersion: unleashctl/v1
+kind: Segment
+metadata:
+  name: betaUsers
+spec:
+  description: Users opted into the beta program
+  constraints:
+    - contextName: userId
+      operator: IN
+      values:
+        - user-1
+        - user-2
+```
+
+Unlike context fields, Unleash's segment API is id-keyed
+(`PUT`/`DELETE /api/admin/segments/{id}`) rather than name-keyed. `diff`/
+`apply` still match local files to remote segments by `metadata.name`,
+then resolve the id internally — renaming `metadata.name` still creates a
+new segment and orphans the old one, same caveat as context fields.
+
+```
+unleashctl segments diff  --context dev                  # what would change
+unleashctl segments apply --context dev --yes             # apply it
+unleashctl segments apply --context dev --dry-run          # print planned requests only
+```
+
+Same exit-code convention as `diff`/`apply` (`0` regardless of pending
+changes, `1` on real error). There's no batch import endpoint for
+segments, so `apply` creates/updates each one individually.
+`--delete-missing`, `--yes`, `-i`/`--interactive` work the same way as
+above — pass `--delete-missing` to turn remote-only segments from
+informational into real delete candidates.
 
 ## Regenerating API types
 

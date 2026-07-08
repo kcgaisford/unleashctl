@@ -236,3 +236,36 @@ func (c *Client) DeleteContextField(ctx context.Context, name string) error {
 	path := fmt.Sprintf("/api/admin/context/%s", name)
 	return c.do(ctx, http.MethodDelete, path, nil, nil)
 }
+
+// ListSegments lists every segment configured on this instance. Unlike
+// ContextField's bare-array response, this endpoint wraps the list in a
+// {"segments": [...]} object.
+func (c *Client) ListSegments(ctx context.Context) ([]gen.AdminSegmentSchema, error) {
+	var out gen.SegmentsSchema
+	if err := c.do(ctx, http.MethodGet, "/api/admin/segments", nil, &out); err != nil {
+		return nil, err
+	}
+	if out.Segments == nil {
+		return nil, nil
+	}
+	return *out.Segments, nil
+}
+
+// CreateSegment creates a new segment.
+func (c *Client) CreateSegment(ctx context.Context, req gen.UpsertSegmentSchema) error {
+	return c.do(ctx, http.MethodPost, "/api/admin/segments", req, nil)
+}
+
+// UpdateSegment updates an existing segment by id. Segments are id-keyed
+// (unlike ContextField's name-keyed endpoints) since name isn't guaranteed
+// stable across an update.
+func (c *Client) UpdateSegment(ctx context.Context, id int, req gen.UpsertSegmentSchema) error {
+	path := fmt.Sprintf("/api/admin/segments/%d", id)
+	return c.do(ctx, http.MethodPut, path, req, nil)
+}
+
+// DeleteSegment deletes a segment by id.
+func (c *Client) DeleteSegment(ctx context.Context, id int) error {
+	path := fmt.Sprintf("/api/admin/segments/%d", id)
+	return c.do(ctx, http.MethodDelete, path, nil, nil)
+}

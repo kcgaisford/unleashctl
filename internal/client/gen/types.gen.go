@@ -406,6 +406,36 @@ func (e VariantSchemaWeightType) Valid() bool {
 	}
 }
 
+// AdminSegmentSchema A description of a [segment](https://docs.getunleash.io/concepts/segments)
+type AdminSegmentSchema struct {
+	// Constraints The list of constraints that are used in this segment
+	Constraints []ConstraintSchema `json:"constraints"`
+
+	// CreatedAt When the segment was created
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The creator's email or username
+	CreatedBy *string `json:"createdBy,omitempty"`
+
+	// Description The description for this segment
+	Description *string `json:"description,omitempty"`
+
+	// Id The ID of this segment
+	Id int `json:"id"`
+
+	// Name The name of this segment
+	Name string `json:"name"`
+
+	// Project The project the segment belongs to. Only present if the segment is a project-specific segment.
+	Project *string `json:"project,omitempty"`
+
+	// UsedInFeatures The number of feature flags that use this segment. The number also includes the any flags with pending change requests that would add this segment.
+	UsedInFeatures *int `json:"usedInFeatures,omitempty"`
+
+	// UsedInProjects The number of projects that use this segment. The number includes any projects with pending change requests that would add this segment.
+	UsedInProjects *int `json:"usedInProjects,omitempty"`
+}
+
 // ConstraintSchema A strategy constraint. For more information, refer to [the strategy constraint reference documentation](https://docs.getunleash.io/concepts/activation-strategies#constraints)
 type ConstraintSchema struct {
 	// CaseInsensitive Whether the operator should be case sensitive or not. Defaults to `false` (being case sensitive).
@@ -1191,6 +1221,12 @@ type SafeguardTriggerConditionSchema struct {
 // SafeguardTriggerConditionSchemaOperator The comparison operator for the threshold check.
 type SafeguardTriggerConditionSchemaOperator string
 
+// SegmentsSchema Data containing a list of [segments](https://docs.getunleash.io/concepts/segments)
+type SegmentsSchema struct {
+	// Segments A list of segments
+	Segments *[]AdminSegmentSchema `json:"segments,omitempty"`
+}
+
 // StrategyVariantSchema This is an experimental property. It may change or be removed as we work on it. Please don't depend on it yet. A strategy variant allows you to attach any data to strategies instead of only returning `true`/`false`. Strategy variants take precedence over feature variants.
 type StrategyVariantSchema struct {
 	// Name The variant name. Must be unique for this feature flag
@@ -1264,6 +1300,21 @@ type UpdateContextFieldSchema struct {
 
 	// Stickiness `true` if this field should be available for use with [custom stickiness](https://docs.getunleash.io/concepts/stickiness#custom-stickiness), otherwise `false`
 	Stickiness *bool `json:"stickiness,omitempty"`
+}
+
+// UpsertSegmentSchema Data used to create or update a segment
+type UpsertSegmentSchema struct {
+	// Constraints The list of constraints that make up this segment
+	Constraints []ConstraintSchema `json:"constraints"`
+
+	// Description A description of what the segment is for
+	Description *string `json:"description,omitempty"`
+
+	// Name The name of the segment
+	Name string `json:"name"`
+
+	// Project The project the segment belongs to if any.
+	Project *string `json:"project,omitempty"`
 }
 
 // VariantSchema A variant allows for further separation of users into segments. See [our excellent documentation](https://docs.getunleash.io/concepts/feature-flag-variants#what-are-variants) for a more detailed description

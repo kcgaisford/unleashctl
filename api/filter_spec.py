@@ -17,6 +17,7 @@ roots = [
     "exportResultSchema", "exportQuerySchema",
     "contextFieldSchema", "contextFieldsSchema",
     "createContextFieldSchema", "updateContextFieldSchema",
+    "upsertSegmentSchema", "adminSegmentSchema", "segmentsSchema",
 ]
 
 ref_re = re.compile(r"#/components/schemas/([A-Za-z0-9_]+)")

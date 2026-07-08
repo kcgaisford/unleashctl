@@ -1,0 +1,12 @@
+apiVersion: unleashctl/v1
+kind: Segment
+metadata:
+  name: betaUsers
+spec:
+  description: Users opted into the beta program
+  constraints:
+    - contextName: userId
+      operator: IN
+      values:
+        - user-1
+        - user-2

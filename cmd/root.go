@@ -22,6 +22,7 @@ var (
 	flagInteractive    bool
 	flagContextsDir    string
 	flagDeleteMissing  bool
+	flagSegmentsDir    string
 )
 
 // defaultProject is the only project OSS Unleash has (spec §1: "One
