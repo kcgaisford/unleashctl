@@ -2,11 +2,14 @@ unleash/
 /dist/
 /unleashctl
 
-# stray local state from unrelated tooling (ruflo-rag-memory MCP plugin),
-# not part of this project
+# stray local state from unrelated tooling (ruflo-rag-memory MCP plugin,
+# agentdb MCP plugin), not part of this project
 /ruvector.db
+/agentdb.rvf
+/agentdb.rvf.lock
 
 # OS/editor cruft
 .DS_Store
 *.log
 
+.claude/

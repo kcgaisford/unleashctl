@@ -21,7 +21,7 @@ Built in Go on Cobra + Viper, wrapping the Unleash Admin API. Manifest specs:
 ## Build
 
 ```
-git clone <this repo>
+git clone git@github.com:kcgaisford/unleashctl.git
 cd unleashctl
 go build -o unleashctl .
 ```

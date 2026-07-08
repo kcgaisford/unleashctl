@@ -29,9 +29,13 @@ var (
 // project" — OSS is effectively single-project).
 const defaultProject = "default"
 
+// version is set at build time via -ldflags "-X .../cmd.version=vX.Y.Z".
+var version = "dev"
+
 var rootCmd = &cobra.Command{
-	Use:   "unleashctl",
-	Short: "unleashctl manages Unleash feature flags as code",
+	Use:     "unleashctl",
+	Short:   "unleashctl manages Unleash feature flags as code",
+	Version: version,
 	Long: `unleashctl wraps the Unleash Admin API. The core workflow is:
 contexts (unleashctl config) -> flags/*.yaml -> diff/apply.`,
 }
