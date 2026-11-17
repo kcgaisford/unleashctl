@@ -223,3 +223,24 @@ func derefStrSlice(values *[]string) []string {
 	}
 	return *values
 }
+
+// ToGenConstraints converts local constraints to the wire shape. A nil list
+// becomes [] rather than null: the segment Admin API requires an array, and
+// for strategies an explicit [] is the same as "no constraints".
+func ToGenConstraints(constraints *[]state.Constraint) []gen.ConstraintSchema {
+	if constraints == nil {
+		return []gen.ConstraintSchema{}
+	}
+	out := make([]gen.ConstraintSchema, len(*constraints))
+	for i, c := range *constraints {
+		out[i] = gen.ConstraintSchema{
+			ContextName:     c.ContextName,
+			Operator:        gen.ConstraintSchemaOperator(c.Operator),
+			CaseInsensitive: c.CaseInsensitive,
+			Inverted:        c.Inverted,
+			Value:           c.Value,
+			Values:          c.Values,
+		}
+	}
+	return out
+}

@@ -9,6 +9,10 @@ type Strategy struct {
 	Name       string            `yaml:"name"`
 	Parameters map[string]string `yaml:"parameters,omitempty"`
 	Disabled   *bool             `yaml:"disabled,omitempty"`
+	// Constraints narrow who the strategy applies to. nil means "not
+	// declared": on a normal context that reconciles to no constraints; on a
+	// ui_managed_constraints context the live constraints are kept as-is.
+	Constraints *[]Constraint `yaml:"constraints,omitempty"`
 }
 
 // Metadata identifies the feature and its owning service (spec §5.1, §6.4).

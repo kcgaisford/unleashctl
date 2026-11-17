@@ -67,7 +67,18 @@ func diffTable(w io.Writer, result differ.Result) error {
 			fmt.Fprintf(w, "  %s\n", name)
 		}
 	}
+	uiDriftTable(w, result.UIDrift, "apply --force-enabled / --force-constraints")
 	return nil
+}
+
+func uiDriftTable(w io.Writer, drift []differ.UIDrift, forceHint string) {
+	if len(drift) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "\n%d UI-managed value(s) differ from local files — reported only, not applied (%s to push):\n", len(drift), forceHint)
+	for _, d := range drift {
+		fmt.Fprintf(w, "  ! %s  %s: %s (live) vs %s (local)\n", d.Name, d.Field, d.Live, d.Local)
+	}
 }
 
 // ContextDiff writes result to w in the requested format ("table", "json", "yaml").
@@ -118,6 +129,7 @@ func contextDiffTable(w io.Writer, result differ.ContextResult) error {
 			fmt.Fprintf(w, "  %s\n", name)
 		}
 	}
+	uiDriftTable(w, result.UIDrift, "context-fields apply --force-legal-values")
 	return nil
 }
 

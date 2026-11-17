@@ -22,7 +22,23 @@ const serviceTagType = "service"
 // strategies/tags/type/description (driven by separate top-level lists)
 // keep applying normally. A brand-new feature still lands disabled, since
 // Unleash auto-provisions every environment at enabled:false on creation.
-func BuildImportPayload(files []*state.File, environment, context string, uiManagedEnabled bool) gen.ExportResultSchema {
+//
+// ui.Constraints, when true, sends each strategy with the *live* constraints
+// of its matched remote strategy (matchRemoteStrategies) instead of the
+// local ones. Omitting them is not enough: import deletes and recreates
+// strategies, so an absent constraints list would wipe what the UI set.
+// remote is the same service-scoped export Diff saw; it may be nil when
+// ui.Constraints is false.
+func BuildImportPayload(files []*state.File, remote *gen.ExportResultSchema, environment, context string, ui UIManaged) gen.ExportResultSchema {
+	remoteStrategiesByFeature := make(map[string][]gen.FeatureStrategySchema)
+	if remote != nil {
+		for _, s := range remote.FeatureStrategies {
+			if s.FeatureName != nil {
+				remoteStrategiesByFeature[*s.FeatureName] = append(remoteStrategiesByFeature[*s.FeatureName], s)
+			}
+		}
+	}
+
 	features := make([]gen.FeatureSchema, 0, len(files))
 	featureEnvs := make([]gen.FeatureEnvironmentSchema, 0, len(files))
 	var strategies []gen.FeatureStrategySchema
@@ -45,7 +61,7 @@ func BuildImportPayload(files []*state.File, environment, context string, uiMana
 			ImpressionData: resolved.ImpressionData,
 		})
 
-		if !uiManagedEnabled {
+		if !ui.Enabled {
 			enabled := resolved.Enabled != nil && *resolved.Enabled
 			nameCopy, envCopy := name, environment
 			featureEnvs = append(featureEnvs, gen.FeatureEnvironmentSchema{
@@ -57,8 +73,18 @@ func BuildImportPayload(files []*state.File, environment, context string, uiMana
 		}
 
 		if resolved.Strategies != nil {
-			for _, s := range *resolved.Strategies {
+			matched := matchRemoteStrategies(*resolved.Strategies, remoteStrategiesByFeature[name])
+			for i, s := range *resolved.Strategies {
 				fn := name
+				var constraints []gen.ConstraintSchema
+				if ui.Constraints {
+					constraints = remoteConstraints(matched[i])
+				} else {
+					constraints = ToGenConstraints(s.Constraints)
+				}
+				if constraints == nil {
+					constraints = []gen.ConstraintSchema{}
+				}
 				var params *gen.ParametersSchema
 				if s.Parameters != nil {
 					p := gen.ParametersSchema(s.Parameters)
@@ -69,6 +95,7 @@ func BuildImportPayload(files []*state.File, environment, context string, uiMana
 					FeatureName: &fn,
 					Parameters:  params,
 					Disabled:    s.Disabled,
+					Constraints: &constraints,
 				})
 			}
 		}

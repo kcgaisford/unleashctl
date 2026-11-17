@@ -10,3 +10,5 @@ contexts:
     token-env: UNLEASH_LOCAL_TOKEN
     allow_sync: false
     ui_managed_enabled: true
+    ui_managed_constraints: true
+    ui_managed_legal_values: true

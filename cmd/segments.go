@@ -205,28 +205,8 @@ func buildUpsertSegmentRequest(file *state.SegmentFile) gen.UpsertSegmentSchema 
 		Name:        file.Metadata.Name,
 		Description: file.Spec.Description,
 		Project:     file.Spec.Project,
-		Constraints: toGenConstraints(file.Spec.Constraints),
+		Constraints: differ.ToGenConstraints(file.Spec.Constraints),
 	}
-}
-
-func toGenConstraints(constraints *[]state.Constraint) []gen.ConstraintSchema {
-	if constraints == nil {
-		// The Admin API requires constraints to be an array, not null — a
-		// segment with no constraints: block still needs [] on the wire.
-		return []gen.ConstraintSchema{}
-	}
-	out := make([]gen.ConstraintSchema, len(*constraints))
-	for i, c := range *constraints {
-		out[i] = gen.ConstraintSchema{
-			ContextName:     c.ContextName,
-			Operator:        gen.ConstraintSchemaOperator(c.Operator),
-			CaseInsensitive: c.CaseInsensitive,
-			Inverted:        c.Inverted,
-			Value:           c.Value,
-			Values:          c.Values,
-		}
-	}
-	return out
 }
 
 // confirmSegmentDeleteInteractive walks candidates one at a time, prompting

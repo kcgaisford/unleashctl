@@ -48,6 +48,10 @@ type Result struct {
 	// no matching local file, when archiveMissing is true (spec §6.1). Set
 	// instead of Informational, never both.
 	Archive []string
+	// UIDrift lists UI-managed fields (see UIManaged) whose live value
+	// differs from an explicit value in flags/*.yaml. Report-only: never a
+	// pending change, never pushed by apply.
+	UIDrift []UIDrift `json:",omitempty" yaml:",omitempty"`
 }
 
 // HasChanges reports whether any create/update/archive is pending.
@@ -57,15 +61,18 @@ type normStrategy struct {
 	Name       string
 	Parameters map[string]string
 	Disabled   bool
+	// Constraints is left nil (not compared) on a ui_managed_constraints
+	// context.
+	Constraints []normConstraint
 }
 
 // Diff compares files (already filtered to one service) against remote, a
 // service-scoped export fetched via client.ExportByTag for the same
 // environment. context selects which contextOverride block applies.
-// uiManagedEnabled, when true, skips comparing "enabled" entirely — the
-// live value is authoritative and never reported as pending (see
-// Context.UIManagedEnabled).
-func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, context string, uiManagedEnabled, archiveMissing bool) Result {
+// ui selects UI-managed fields: those are kept out of Changes — the live
+// value is authoritative and never reported as pending — but a mismatch
+// against an explicit local value is surfaced in Result.UIDrift.
+func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, context string, ui UIManaged, archiveMissing bool) Result {
 	remoteFeatures := make(map[string]gen.FeatureSchema, len(remote.Features))
 	for _, f := range remote.Features {
 		remoteFeatures[f.Name] = f
@@ -111,6 +118,7 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 
 	localNames := make(map[string]bool, len(files))
 	var changes []Change
+	var uiDrift []UIDrift
 
 	for _, file := range files {
 		name := file.Metadata.Name
@@ -155,17 +163,31 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 			details = append(details, fmt.Sprintf("impressionData: %t -> %t", derefBool(rf.ImpressionData), *resolved.ImpressionData))
 		}
 
-		if !uiManagedEnabled {
-			re, hasEnv := remoteEnvs[name]
+		re, hasEnv := remoteEnvs[name]
+		remoteEnabled := hasEnv && re.Enabled
+		if ui.Enabled {
+			// Only an explicit local enabled: is an opinion worth flagging;
+			// an unset one means the file defers entirely to the UI.
+			if resolved.Enabled != nil && *resolved.Enabled != remoteEnabled {
+				uiDrift = append(uiDrift, UIDrift{
+					Name:  name,
+					Field: "enabled",
+					Live:  fmt.Sprint(remoteEnabled),
+					Local: fmt.Sprint(*resolved.Enabled),
+				})
+			}
+		} else {
 			localEnabled := resolved.Enabled != nil && *resolved.Enabled
-			remoteEnabled := hasEnv && re.Enabled
 			if localEnabled != remoteEnabled {
 				details = append(details, fmt.Sprintf("enabled: %t -> %t", remoteEnabled, localEnabled))
 			}
 		}
 
-		localStrategies := normalizeLocal(resolved.Strategies)
-		remoteStrategies := normalizeRemote(remoteStrategiesByFeature[name])
+		localStrategies := normalizeLocal(resolved.Strategies, !ui.Constraints)
+		remoteStrategies := normalizeRemote(remoteStrategiesByFeature[name], !ui.Constraints)
+		if ui.Constraints && resolved.Strategies != nil {
+			uiDrift = append(uiDrift, constraintDrift(name, *resolved.Strategies, remoteStrategiesByFeature[name])...)
+		}
 		if !reflect.DeepEqual(localStrategies, remoteStrategies) {
 			details = append(details, fmt.Sprintf("strategies: %s -> %s",
 				formatNormStrategies(remoteStrategies), formatNormStrategies(localStrategies)))
@@ -208,8 +230,34 @@ func Diff(files []*state.File, remote *gen.ExportResultSchema, environment, cont
 	sort.Strings(informational)
 	sort.Strings(archive)
 	sort.Slice(changes, func(i, j int) bool { return changes[i].FeatureName < changes[j].FeatureName })
+	sort.SliceStable(uiDrift, func(i, j int) bool { return uiDrift[i].Name < uiDrift[j].Name })
 
-	return Result{Changes: changes, Informational: informational, Archive: archive}
+	return Result{Changes: changes, Informational: informational, Archive: archive, UIDrift: uiDrift}
+}
+
+// constraintDrift reports, for each local strategy that declares
+// constraints: explicitly, a mismatch against the live strategy it is
+// matched to (see matchRemoteStrategies). A strategy with no constraints:
+// key defers to the UI and is never reported.
+func constraintDrift(feature string, local []state.Strategy, remote []gen.FeatureStrategySchema) []UIDrift {
+	var out []UIDrift
+	matched := matchRemoteStrategies(local, remote)
+	for i, l := range local {
+		if l.Constraints == nil {
+			continue
+		}
+		lc := normalizeLocalConstraints(l.Constraints)
+		rc := normalizeRemoteConstraints(remoteConstraints(matched[i]))
+		if !reflect.DeepEqual(lc, rc) {
+			out = append(out, UIDrift{
+				Name:  feature,
+				Field: fmt.Sprintf("strategies[%d] %s constraints", i, l.Name),
+				Live:  formatNormConstraints(rc),
+				Local: formatNormConstraints(lc),
+			})
+		}
+	}
+	return out
 }
 
 // specDetails renders a fully-resolved Spec (plus the file's non-overridable
@@ -245,7 +293,7 @@ func specDetails(file *state.File, spec state.Spec) []string {
 // flag as a single compact fragment, shared by both the full-spec dump
 // (Create/Revive, via formatStrategies) and the before/after Update line
 // (via formatNormStrategies).
-func formatStrategy(name string, params map[string]string, disabled bool) string {
+func formatStrategy(name string, params map[string]string, disabled bool, constraints []normConstraint) string {
 	part := name
 	if len(params) > 0 {
 		keys := make([]string, 0, len(params))
@@ -259,6 +307,9 @@ func formatStrategy(name string, params map[string]string, disabled bool) string
 		}
 		part += "(" + strings.Join(pairs, ", ") + ")"
 	}
+	if len(constraints) > 0 {
+		part += " {" + formatNormConstraints(constraints) + "}"
+	}
 	if disabled {
 		part += " [disabled]"
 	}
@@ -271,7 +322,11 @@ func formatStrategies(strategies []state.Strategy) string {
 	}
 	parts := make([]string, len(strategies))
 	for i, s := range strategies {
-		parts[i] = formatStrategy(s.Name, s.Parameters, s.Disabled != nil && *s.Disabled)
+		var constraints []normConstraint
+		if s.Constraints != nil {
+			constraints = normalizeLocalConstraints(s.Constraints)
+		}
+		parts[i] = formatStrategy(s.Name, s.Parameters, s.Disabled != nil && *s.Disabled, constraints)
 	}
 	return strings.Join(parts, ", ")
 }
@@ -284,12 +339,14 @@ func formatNormStrategies(strategies []normStrategy) string {
 	}
 	parts := make([]string, len(strategies))
 	for i, s := range strategies {
-		parts[i] = formatStrategy(s.Name, s.Parameters, s.Disabled)
+		parts[i] = formatStrategy(s.Name, s.Parameters, s.Disabled, s.Constraints)
 	}
 	return strings.Join(parts, ", ")
 }
 
-func normalizeLocal(strategies *[]state.Strategy) []normStrategy {
+// normalizeLocal/normalizeRemote include constraints in the comparison only
+// when withConstraints is true (i.e. not a ui_managed_constraints context).
+func normalizeLocal(strategies *[]state.Strategy, withConstraints bool) []normStrategy {
 	if strategies == nil {
 		return nil
 	}
@@ -300,11 +357,14 @@ func normalizeLocal(strategies *[]state.Strategy) []normStrategy {
 			disabled = *s.Disabled
 		}
 		out[i] = normStrategy{Name: s.Name, Parameters: normalizeParams(s.Parameters), Disabled: disabled}
+		if withConstraints {
+			out[i].Constraints = normalizeLocalConstraints(s.Constraints)
+		}
 	}
 	return out
 }
 
-func normalizeRemote(strategies []gen.FeatureStrategySchema) []normStrategy {
+func normalizeRemote(strategies []gen.FeatureStrategySchema, withConstraints bool) []normStrategy {
 	if strategies == nil {
 		return nil
 	}
@@ -319,6 +379,9 @@ func normalizeRemote(strategies []gen.FeatureStrategySchema) []normStrategy {
 			disabled = *s.Disabled
 		}
 		out[i] = normStrategy{Name: s.Name, Parameters: normalizeParams(params), Disabled: disabled}
+		if withConstraints {
+			out[i].Constraints = normalizeRemoteConstraints(remoteConstraints(&s))
+		}
 	}
 	return out
 }
