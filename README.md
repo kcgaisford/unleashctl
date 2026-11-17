@@ -58,18 +58,45 @@ Every setting can also be passed without a config file at all — useful for
 CI — using `--url`/`--token`/`--environment`, or the `UNLEASHCTL_URL` /
 `UNLEASHCTL_TOKEN` env vars. Precedence is flag > env > context.
 
-### `ui_managed_enabled`: let the UI own on/off for a context
+### `ui_managed_*`: let the UI own a field
 
-Set `ui_managed_enabled: true` on a context (typically prod) when an
-engineer is expected to flip a flag on by hand in the Unleash UI, rather
-than by editing `flags/*.yaml`. For that context, `diff`/`apply` never
-compare or push the `enabled` field — the live value is authoritative and
-is left alone. Everything else (strategies, rollout parameters, type,
-description, tags) keeps reconciling from `flags/*.yaml` exactly as usual.
-A brand-new feature still lands disabled, since Unleash itself defaults a
-newly created environment to `enabled: false`. Both `diff` and `apply`
-print a one-line note when this is active, so it's clear why `enabled`
-never shows up as a pending change.
+Three per-context switches (typically on prod) hand a field to the Unleash UI
+instead of `flags/*.yaml`:
+
+- **`ui_managed_enabled: true`**: engineers flip flags on/off by hand in
+  the UI. `apply` never pushes `enabled`, so the live value stays as it is.
+  A brand-new feature still lands disabled, because Unleash defaults a new
+  environment to `enabled: false`.
+- **`ui_managed_constraints: true`**: engineers add or edit strategy
+  constraints by hand in the UI. `apply` keeps the live constraints on each
+  strategy. Strategy names, parameters and order still reconcile from
+  `flags/*.yaml`. Unleash's import deletes and recreates every strategy, so
+  `apply` copies each strategy's live constraints into the payload. It
+  pairs strategies by name and position: the 1st local `flexibleRollout`
+  gets the constraints of the 1st live `flexibleRollout`, and so on. A
+  local strategy with no live match starts with no constraints.
+- **`ui_managed_legal_values: true`**: engineers add legal values to
+  context fields by hand in the UI. `context-fields apply` sends the live
+  legal values back on every update instead of the file's, since the
+  update replaces the whole list. Description and stickiness still
+  reconcile from `contexts/*.yaml`. A field that doesn't exist yet is still
+  created with the file's `legalValues`.
+
+For a UI-managed field, `diff` and `apply` never show a pending change.
+When a file sets the field explicitly (`enabled:`, `constraints:` on a
+strategy, or `legalValues:`) and the value doesn't match the live one, both commands print
+it in a separate **drift** section, which is report-only. A file that
+leaves the field out defers to the UI and never shows drift. To push the
+file's value anyway for one run, pass `--force-enabled` /
+`--force-constraints` to `apply`, or `--force-legal-values` to
+`context-fields apply`. Pass the same flag to `diff` to preview
+the result as normal changes. Both commands print a one-line note when
+either switch is active.
+
+Without `ui_managed_constraints`, strategy constraints come from
+`flags/*.yaml` like everything else. A strategy with no `constraints:`
+reconciles to *no* constraints, and `diff` shows the removal of any that
+were added in the UI.
 
 ```yaml
   - name: prod
@@ -77,6 +104,8 @@ never shows up as a pending change.
     environment: production
     token-env: UNLEASH_PROD_TOKEN
     ui_managed_enabled: true
+    ui_managed_constraints: true
+    ui_managed_legal_values: true
 ```
 
 ## Author flags/*.yaml

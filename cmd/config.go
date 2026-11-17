@@ -20,11 +20,27 @@ type Context struct {
 	AllowSync   *bool  `yaml:"allow_sync,omitempty"`
 
 	// UIManagedEnabled means enabled/disabled state for this context is
-	// authoritative in the Unleash UI, not in flags/*.yaml: diff/apply never
-	// compare or push it, only strategies/type/description/tags reconcile
-	// normally. Typical use: prod flags an engineer turns on by hand rather
-	// than via a manifest change.
+	// authoritative in the Unleash UI, not in flags/*.yaml: apply never pushes
+	// it (unless --force-enabled), and diff reports a mismatch against an
+	// explicit local enabled: as report-only drift rather than a pending
+	// change. Strategies/type/description/tags reconcile normally. Typical
+	// use: prod flags an engineer turns on by hand rather than via a
+	// manifest change.
 	UIManagedEnabled bool `yaml:"ui_managed_enabled,omitempty"`
+
+	// UIManagedConstraints is the same idea for strategy constraints: apply
+	// keeps whatever constraints are live on each strategy (unless
+	// --force-constraints) and diff reports a mismatch against an explicit
+	// local constraints: as report-only drift. Strategies themselves
+	// (name/parameters/order) still reconcile from flags/*.yaml.
+	UIManagedConstraints bool `yaml:"ui_managed_constraints,omitempty"`
+
+	// UIManagedLegalValues is the same idea for context fields' legal
+	// values: context-fields apply re-sends the live list on update (unless
+	// --force-legal-values), and diff reports a mismatch against an explicit
+	// local legalValues: as report-only drift. A field that doesn't exist yet
+	// is still created with the file's legalValues — nothing live to keep.
+	UIManagedLegalValues bool `yaml:"ui_managed_legal_values,omitempty"`
 }
 
 // AllowSyncResolved implements the name-based default from spec §2: false

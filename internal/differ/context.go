@@ -40,6 +40,9 @@ type ContextResult struct {
 	// Delete lists remote context fields with no matching local file, when
 	// deleteMissing is true. Set instead of Informational, never both.
 	Delete []string
+	// UIDrift lists context fields whose live legal values differ from an
+	// explicit legalValues: while legal values are UI-managed. Report-only.
+	UIDrift []UIDrift `json:",omitempty" yaml:",omitempty"`
 }
 
 // HasChanges reports whether any create/update/delete is pending.
@@ -53,8 +56,10 @@ type normLegalValue struct {
 // DiffContexts compares files against remote, the full list of context
 // fields fetched via client.ListContextFields. deleteMissing selects
 // whether remote-only fields are reported as Delete candidates or purely
-// informationally (see ContextResult).
-func DiffContexts(files []*state.ContextFile, remote []gen.ContextFieldSchema, deleteMissing bool) ContextResult {
+// informationally (see ContextResult). uiLegalValues, when true, keeps legal
+// values out of Changes (the UI owns them) and reports a mismatch against an
+// explicit local legalValues: in ContextResult.UIDrift instead.
+func DiffContexts(files []*state.ContextFile, remote []gen.ContextFieldSchema, uiLegalValues, deleteMissing bool) ContextResult {
 	remoteFields := make(map[string]gen.ContextFieldSchema, len(remote))
 	for _, f := range remote {
 		remoteFields[f.Name] = f
@@ -62,6 +67,7 @@ func DiffContexts(files []*state.ContextFile, remote []gen.ContextFieldSchema, d
 
 	localNames := make(map[string]bool, len(files))
 	var changes []ContextChange
+	var uiDrift []UIDrift
 
 	for _, file := range files {
 		name := file.Metadata.Name
@@ -90,8 +96,20 @@ func DiffContexts(files []*state.ContextFile, remote []gen.ContextFieldSchema, d
 		localValues := normalizeLocalLegalValues(spec.LegalValues)
 		remoteValues := normalizeRemoteLegalValues(rf.LegalValues)
 		if !reflect.DeepEqual(localValues, remoteValues) {
-			details = append(details, fmt.Sprintf("legalValues: %s -> %s",
-				formatNormLegalValues(remoteValues), formatNormLegalValues(localValues)))
+			switch {
+			case !uiLegalValues:
+				details = append(details, fmt.Sprintf("legalValues: %s -> %s",
+					formatNormLegalValues(remoteValues), formatNormLegalValues(localValues)))
+			case spec.LegalValues != nil:
+				// Only an explicit local legalValues: is an opinion worth
+				// flagging; an unset one defers entirely to the UI.
+				uiDrift = append(uiDrift, UIDrift{
+					Name:  name,
+					Field: "legalValues",
+					Live:  formatNormLegalValues(remoteValues),
+					Local: formatNormLegalValues(localValues),
+				})
+			}
 		}
 
 		if len(details) > 0 {
@@ -115,7 +133,9 @@ func DiffContexts(files []*state.ContextFile, remote []gen.ContextFieldSchema, d
 	sort.Strings(deleteCandidates)
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Name < changes[j].Name })
 
-	return ContextResult{Changes: changes, Informational: informational, Delete: deleteCandidates}
+	sort.SliceStable(uiDrift, func(i, j int) bool { return uiDrift[i].Name < uiDrift[j].Name })
+
+	return ContextResult{Changes: changes, Informational: informational, Delete: deleteCandidates, UIDrift: uiDrift}
 }
 
 // contextSpecDetails renders a full local spec into detail lines for the

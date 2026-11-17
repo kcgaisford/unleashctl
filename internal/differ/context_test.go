@@ -15,7 +15,7 @@ func TestDiffContextsCreate(t *testing.T) {
 		},
 	}
 
-	result := DiffContexts(files, nil, false)
+	result := DiffContexts(files, nil, false, false)
 	if len(result.Changes) != 1 || result.Changes[0].Action != ContextActionCreate {
 		t.Fatalf("want one create, got %+v", result.Changes)
 	}
@@ -32,7 +32,7 @@ func TestDiffContextsUpdateOnDescriptionMismatch(t *testing.T) {
 		{Name: "subscriptionTier", Description: strPtrT("old description")},
 	}
 
-	result := DiffContexts(files, remote, false)
+	result := DiffContexts(files, remote, false, false)
 	if len(result.Changes) != 1 || result.Changes[0].Action != ContextActionUpdate {
 		t.Fatalf("want one update, got %+v", result.Changes)
 	}
@@ -64,7 +64,7 @@ func TestDiffContextsNoChangesWhenIdentical(t *testing.T) {
 		},
 	}
 
-	result := DiffContexts(files, remote, false)
+	result := DiffContexts(files, remote, false, false)
 	if len(result.Changes) != 0 {
 		t.Fatalf("want no changes (legalValues order shouldn't matter), got %+v", result.Changes)
 	}
@@ -74,7 +74,7 @@ func TestDiffContextsInformationalForUnmatchedRemote(t *testing.T) {
 	var files []*state.ContextFile
 	remote := []gen.ContextFieldSchema{{Name: "retired-field"}}
 
-	result := DiffContexts(files, remote, false)
+	result := DiffContexts(files, remote, false, false)
 	if len(result.Changes) != 0 {
 		t.Fatalf("want no changes (additive-only default), got %+v", result.Changes)
 	}
@@ -90,7 +90,7 @@ func TestDiffContextsDeleteMissingMovesInformationalToDelete(t *testing.T) {
 	var files []*state.ContextFile
 	remote := []gen.ContextFieldSchema{{Name: "retired-field"}}
 
-	result := DiffContexts(files, remote, true)
+	result := DiffContexts(files, remote, false, true)
 	if len(result.Informational) != 0 {
 		t.Fatalf("want no informational names when deleteMissing, got %v", result.Informational)
 	}
@@ -119,8 +119,47 @@ func TestDiffContextsNoChangesForNilVsEmptyLegalValues(t *testing.T) {
 		{Name: "noLegalValues", Stickiness: boolPtrT(true), LegalValues: &empty},
 	}
 
-	result := DiffContexts(files, remote, false)
+	result := DiffContexts(files, remote, false, false)
 	if len(result.Changes) != 0 {
 		t.Fatalf("want no changes for nil-vs-empty legalValues, got %+v", result.Changes)
+	}
+}
+
+func legalValuesFixture() ([]*state.ContextFile, []gen.ContextFieldSchema) {
+	files := []*state.ContextFile{{Metadata: state.Metadata{Name: "tier"}}}
+	remote := []gen.ContextFieldSchema{{
+		Name:        "tier",
+		LegalValues: &[]gen.LegalValueSchema{{Value: "gold"}, {Value: "silver"}},
+	}}
+	return files, remote
+}
+
+// TestDiffContextsLegalValuesReconciledByDefault: without UI management a
+// file with no legalValues: would wipe live ones, so it shows as an update.
+func TestDiffContextsLegalValuesReconciledByDefault(t *testing.T) {
+	files, remote := legalValuesFixture()
+	result := DiffContexts(files, remote, false, false)
+	if len(result.Changes) != 1 {
+		t.Fatalf("want one update, got %+v", result.Changes)
+	}
+}
+
+func TestDiffContextsIgnoresLegalValuesWhenUIManaged(t *testing.T) {
+	files, remote := legalValuesFixture()
+	result := DiffContexts(files, remote, true, false)
+	if len(result.Changes) != 0 || len(result.UIDrift) != 0 {
+		t.Fatalf("want no changes or drift, got changes=%+v drift=%+v", result.Changes, result.UIDrift)
+	}
+}
+
+func TestDiffContextsReportsLegalValueDriftWhenUIManagedAndExplicit(t *testing.T) {
+	files, remote := legalValuesFixture()
+	files[0].Spec.LegalValues = &[]state.LegalValue{{Value: "gold"}}
+	result := DiffContexts(files, remote, true, false)
+	if len(result.Changes) != 0 {
+		t.Fatalf("want no pending changes, got %+v", result.Changes)
+	}
+	if len(result.UIDrift) != 1 || result.UIDrift[0].Field != "legalValues" {
+		t.Fatalf("want one legalValues drift, got %+v", result.UIDrift)
 	}
 }

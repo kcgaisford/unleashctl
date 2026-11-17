@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/kcgaisford/unleashctl/internal/differ"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -23,6 +24,9 @@ var (
 	flagContextsDir    string
 	flagDeleteMissing  bool
 	flagSegmentsDir    string
+	flagForceEnabled   bool
+	flagForceConstr    bool
+	flagForceLegal     bool
 )
 
 // defaultProject is the only project OSS Unleash has (spec §1: "One
@@ -63,8 +67,9 @@ type connection struct {
 	URL         string
 	Token       string
 	Environment string
-	// UIManagedEnabled mirrors Context.UIManagedEnabled — see its doc comment.
-	UIManagedEnabled bool
+	// UIManaged mirrors Context.UIManagedEnabled/UIManagedConstraints — see
+	// their doc comments.
+	UIManaged differ.UIManaged
 }
 
 // resolveConnection implements spec §2's per-command precedence: flag > env
@@ -111,11 +116,15 @@ func resolveConnection() (*connection, error) {
 	}
 
 	return &connection{
-		ContextName:      contextName,
-		URL:              url,
-		Token:            token,
-		Environment:      environment,
-		UIManagedEnabled: ctx.UIManagedEnabled,
+		ContextName: contextName,
+		URL:         url,
+		Token:       token,
+		Environment: environment,
+		UIManaged: differ.UIManaged{
+			Enabled:     ctx.UIManagedEnabled,
+			Constraints: ctx.UIManagedConstraints,
+			LegalValues: ctx.UIManagedLegalValues,
+		},
 	}, nil
 }
 

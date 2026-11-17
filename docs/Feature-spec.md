@@ -22,6 +22,10 @@ spec:                              # applies everywhere unless overridden
   strategies:
     - name: flexibleRollout
       parameters: { rollout: "25", stickiness: userId, groupId: new-checkout }
+      constraints:                 # optional — ignored on ui_managed_constraints contexts
+        - contextName: userId
+          operator: IN
+          values: [alice, bob]
 links:                             # optional — additional links for the feature
   - url: https://wiki.internal/new-checkout
     title: Design doc

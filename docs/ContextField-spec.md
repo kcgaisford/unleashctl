@@ -37,6 +37,16 @@ left out of this spec: Unleash's own UI never exposes it for editing
 silently discards/resets it server-side — not a field worth managing
 declaratively.
 
+### UI-managed legal values
+
+On a CLI context with `ui_managed_legal_values: true`, legal values belong
+to the Unleash UI. `diff` never shows them as a pending change. `apply`
+sends the live list back on every update, because the update endpoint
+replaces the whole list. An explicit `legalValues:` that doesn't match the
+live list is reported as drift but not applied. `--force-legal-values`
+pushes the file's list anyway. A file with no `legalValues:` never shows
+drift.
+
 ## Commands
 
 Grouped under `context-fields` to avoid colliding with the existing

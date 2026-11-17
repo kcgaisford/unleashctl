@@ -32,6 +32,8 @@ func init() {
 	applyCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "print the request payload; make no network call")
 	applyCmd.Flags().BoolVar(&flagArchiveMissing, "archive-missing", false, "treat remote features in scope with no local file as archive candidates (requires --service)")
 	applyCmd.Flags().BoolVarP(&flagInteractive, "interactive", "i", false, "confirm each archive candidate individually instead of one batch confirmation")
+	applyCmd.Flags().BoolVar(&flagForceEnabled, "force-enabled", false, "on a ui_managed_enabled context, push enabled from flags/*.yaml anyway, overwriting the UI value")
+	applyCmd.Flags().BoolVar(&flagForceConstr, "force-constraints", false, "on a ui_managed_constraints context, push strategy constraints from flags/*.yaml anyway, overwriting the UI constraints")
 	applyCmd.MarkFlagsMutuallyExclusive("yes", "interactive")
 	rootCmd.AddCommand(applyCmd)
 }
@@ -56,15 +58,13 @@ func runApply(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if conn.UIManagedEnabled {
-		fmt.Printf("enabled/disabled is UI-managed for context %s — not diffed or applied\n", conn.ContextName)
-	}
+	applyUIManagedOverride(conn)
 
 	c := client.New(conn.URL, conn.Token)
 	ctx := context.Background()
 
 	for _, service := range services {
-		result, conflicts, err := runDiffScoped(ctx, c, conn, service, files, flagArchiveMissing)
+		result, remote, conflicts, err := runDiffScoped(ctx, c, conn, service, files, flagArchiveMissing)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func runApply(_ *cobra.Command, _ []string) error {
 		if flagDryRun {
 			if len(result.Changes) > 0 {
 				scoped := state.FilterByService(files, service)
-				payload := differ.BuildImportPayload(scoped, conn.Environment, conn.ContextName, conn.UIManagedEnabled)
+				payload := differ.BuildImportPayload(scoped, remote, conn.Environment, conn.ContextName, conn.UIManaged)
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
 				fmt.Printf("\n--dry-run: request payload for service %s (no network call made)\n", service)
@@ -122,7 +122,7 @@ func runApply(_ *cobra.Command, _ []string) error {
 				}
 
 				scoped := state.FilterByService(files, service)
-				payload := differ.BuildImportPayload(scoped, conn.Environment, conn.ContextName, conn.UIManagedEnabled)
+				payload := differ.BuildImportPayload(scoped, remote, conn.Environment, conn.ContextName, conn.UIManaged)
 
 				validation, err := c.ValidateImport(ctx, defaultProject, conn.Environment, payload)
 				if err != nil {

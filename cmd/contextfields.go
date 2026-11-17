@@ -52,6 +52,7 @@ import endpoint for context fields, unlike Feature flags).`,
 func init() {
 	contextFieldsCmd.PersistentFlags().StringVar(&flagContextsDir, "contexts-dir", "contexts", "directory containing *.yaml desired-state files")
 	contextFieldsCmd.PersistentFlags().BoolVar(&flagDeleteMissing, "delete-missing", false, "delete remote context fields with no local file")
+	contextFieldsCmd.PersistentFlags().BoolVar(&flagForceLegal, "force-legal-values", false, "on a ui_managed_legal_values context, diff/push legalValues from contexts/*.yaml anyway, overwriting the UI values")
 
 	contextFieldsApplyCmd.Flags().BoolVar(&flagYes, "yes", false, "apply without an interactive confirmation prompt")
 	contextFieldsApplyCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "print the planned requests; make no network call")
@@ -65,13 +66,18 @@ func init() {
 
 // runContextFieldsScoped fetches remote context fields and diffs them
 // against files. Shared by diff and apply so both commands see identical
-// output.
-func runContextFieldsScoped(ctx context.Context, c *client.Client, files []*state.ContextFile) (differ.ContextResult, error) {
+// output. The fetched fields come back keyed by name so apply can re-send
+// live legal values when they're UI-managed.
+func runContextFieldsScoped(ctx context.Context, c *client.Client, conn *connection, files []*state.ContextFile) (differ.ContextResult, map[string]gen.ContextFieldSchema, error) {
 	remote, err := c.ListContextFields(ctx)
 	if err != nil {
-		return differ.ContextResult{}, fmt.Errorf("fetching remote context fields: %w", err)
+		return differ.ContextResult{}, nil, fmt.Errorf("fetching remote context fields: %w", err)
 	}
-	return differ.DiffContexts(files, remote, flagDeleteMissing), nil
+	byName := make(map[string]gen.ContextFieldSchema, len(remote))
+	for _, f := range remote {
+		byName[f.Name] = f
+	}
+	return differ.DiffContexts(files, remote, conn.UIManaged.LegalValues, flagDeleteMissing), byName, nil
 }
 
 func runContextFieldsDiff(_ *cobra.Command, _ []string) error {
@@ -85,10 +91,12 @@ func runContextFieldsDiff(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	applyLegalValuesOverride(conn)
+
 	c := client.New(conn.URL, conn.Token)
 	ctx := context.Background()
 
-	result, err := runContextFieldsScoped(ctx, c, files)
+	result, _, err := runContextFieldsScoped(ctx, c, conn, files)
 	if err != nil {
 		return err
 	}
@@ -115,10 +123,12 @@ func runContextFieldsApply(_ *cobra.Command, _ []string) error {
 		filesByName[f.Metadata.Name] = f
 	}
 
+	applyLegalValuesOverride(conn)
+
 	c := client.New(conn.URL, conn.Token)
 	ctx := context.Background()
 
-	result, err := runContextFieldsScoped(ctx, c, files)
+	result, remote, err := runContextFieldsScoped(ctx, c, conn, files)
 	if err != nil {
 		return err
 	}
@@ -132,7 +142,7 @@ func runContextFieldsApply(_ *cobra.Command, _ []string) error {
 
 	if flagDryRun {
 		for _, ch := range result.Changes {
-			printContextFieldDryRun(ch, filesByName[ch.Name])
+			printContextFieldDryRun(ch, buildUpdateContextFieldRequest(filesByName[ch.Name], remote, conn.UIManaged.LegalValues), filesByName[ch.Name])
 		}
 		if len(result.Delete) > 0 {
 			fmt.Printf("\n--dry-run: would delete %d context field(s) (no network call made):\n", len(result.Delete))
@@ -154,7 +164,7 @@ func runContextFieldsApply(_ *cobra.Command, _ []string) error {
 						return fmt.Errorf("creating context field %s: %w", ch.Name, err)
 					}
 				} else {
-					if err := c.UpdateContextField(ctx, ch.Name, buildUpdateContextFieldRequest(file)); err != nil {
+					if err := c.UpdateContextField(ctx, ch.Name, buildUpdateContextFieldRequest(file, remote, conn.UIManaged.LegalValues)); err != nil {
 						return fmt.Errorf("updating context field %s: %w", ch.Name, err)
 					}
 				}
@@ -194,7 +204,7 @@ func runContextFieldsApply(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func printContextFieldDryRun(ch differ.ContextChange, file *state.ContextFile) {
+func printContextFieldDryRun(ch differ.ContextChange, update gen.UpdateContextFieldSchema, file *state.ContextFile) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if ch.Action == differ.ContextActionCreate {
@@ -202,7 +212,7 @@ func printContextFieldDryRun(ch differ.ContextChange, file *state.ContextFile) {
 		_ = enc.Encode(buildCreateContextFieldRequest(file))
 	} else {
 		fmt.Printf("\n--dry-run: PUT /api/admin/context/%s (no network call made)\n", ch.Name)
-		_ = enc.Encode(buildUpdateContextFieldRequest(file))
+		_ = enc.Encode(update)
 	}
 }
 
@@ -215,11 +225,18 @@ func buildCreateContextFieldRequest(file *state.ContextFile) gen.CreateContextFi
 	}
 }
 
-func buildUpdateContextFieldRequest(file *state.ContextFile) gen.UpdateContextFieldSchema {
+// buildUpdateContextFieldRequest builds the PUT body. The update replaces
+// legalValues wholesale, so with uiLegalValues the live list is re-sent
+// instead of the local one — omitting it would wipe UI-added values.
+func buildUpdateContextFieldRequest(file *state.ContextFile, remote map[string]gen.ContextFieldSchema, uiLegalValues bool) gen.UpdateContextFieldSchema {
+	legalValues := toGenLegalValues(file.Spec.LegalValues)
+	if uiLegalValues {
+		legalValues = remote[file.Metadata.Name].LegalValues
+	}
 	return gen.UpdateContextFieldSchema{
 		Description: file.Spec.Description,
 		Stickiness:  file.Spec.Stickiness,
-		LegalValues: toGenLegalValues(file.Spec.LegalValues),
+		LegalValues: legalValues,
 	}
 }
 
